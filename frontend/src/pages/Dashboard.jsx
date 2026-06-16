@@ -207,6 +207,7 @@ export default function Dashboard({ selectedClient, onNavigate }) {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-5 py-3 text-left text-2xs font-bold uppercase tracking-wider text-slate-400">Condition</th>
+                <th className="px-5 py-3 text-left text-2xs font-bold uppercase tracking-wider text-slate-400 hidden sm:table-cell">Validation</th>
                 <th className="px-5 py-3 text-left text-2xs font-bold uppercase tracking-wider text-slate-400 hidden md:table-cell">Type</th>
                 <th className="px-5 py-3 text-left text-2xs font-bold uppercase tracking-wider text-slate-400">Status</th>
                 <th className="px-5 py-3 text-left text-2xs font-bold uppercase tracking-wider text-slate-400 hidden lg:table-cell">Key Metric</th>
@@ -232,6 +233,11 @@ export default function Dashboard({ selectedClient, onNavigate }) {
                           {!cond.enabled && <span className="ml-2 text-2xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">off</span>}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5 hidden sm:table-cell">
+                      {cond.validation_name
+                        ? <span className="text-slate-700">{cond.validation_name}</span>
+                        : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-5 py-3.5 hidden md:table-cell">
                       <span className={`inline-block text-2xs font-semibold px-2 py-0.5 rounded-full ${meta.chip || 'bg-slate-100 text-slate-600'}`}>

@@ -109,6 +109,7 @@ export default function Runs() {
                                   ? <XCircle size={12} className="text-red-500 flex-shrink-0" />
                                   : <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />}
                                 <span className="font-medium text-slate-700 min-w-[140px]">{s.name}</span>
+                                {s.validation_name && <span className="text-slate-500">{s.validation_name}</span>}
                                 <span className="text-slate-400">{s.type}</span>
                                 <span className="text-slate-500">{s.error ? s.error : rateOf(s)}</span>
                               </div>

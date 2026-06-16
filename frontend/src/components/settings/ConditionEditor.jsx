@@ -287,18 +287,19 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ConditionEditor({ initial, columnsAxel, columnsDms, saving, onSave, onCancel }) {
-  const [name,      setName]      = useState(initial?.name    || '')
-  const [type,      setType]      = useState(initial?.type    || 'sheet_diff')
-  const [enabled,   setEnabled]   = useState(initial?.enabled ?? true)
-  const [config,    setConfig]    = useState(initial?.config  || {})
-  const [nameError, setNameError] = useState('')
+  const [name,       setName]       = useState(initial?.name    || '')
+  const [validation, setValidation] = useState(initial?.validation_name || '')
+  const [type,       setType]       = useState(initial?.type    || 'sheet_diff')
+  const [enabled,    setEnabled]    = useState(initial?.enabled ?? true)
+  const [config,     setConfig]     = useState(initial?.config  || {})
+  const [nameError,  setNameError]  = useState('')
 
   const changeType = t => { setType(t); setConfig({}) }
 
   const handleSave = () => {
     if (!name.trim()) { setNameError('Condition name is required'); return }
     setNameError('')
-    onSave({ name: name.trim(), type, enabled, config })
+    onSave({ name: name.trim(), validation_name: validation.trim(), type, enabled, config })
   }
 
   return (
@@ -316,10 +317,16 @@ export default function ConditionEditor({ initial, columnsAxel, columnsDms, savi
 
       <div className="p-5 space-y-5">
         {/* Name */}
-        <div>
-          <Label>Condition Name</Label>
-          <TextInput value={name} onChange={v => { setName(v); if (v.trim()) setNameError('') }} placeholder="e.g. Invoice Count Check" />
-          {nameError && <p className="mt-1.5 text-xs text-red-500">{nameError}</p>}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Condition Name</Label>
+            <TextInput value={name} onChange={v => { setName(v); if (v.trim()) setNameError('') }} placeholder="e.g. Invoice Count Check" />
+            {nameError && <p className="mt-1.5 text-xs text-red-500">{nameError}</p>}
+          </div>
+          <div>
+            <Label>Validation Name</Label>
+            <TextInput value={validation} onChange={setValidation} placeholder="e.g. Downtown Store" />
+          </div>
         </div>
 
         {/* Type selector */}

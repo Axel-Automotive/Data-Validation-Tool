@@ -50,6 +50,7 @@ def record(
     summary = [
         {
             "name": c.get("condition_name"),
+            "validation_name": c.get("validation_name", ""),
             "type": c.get("type"),
             "error": c.get("error"),
             "metrics": c.get("metrics"),

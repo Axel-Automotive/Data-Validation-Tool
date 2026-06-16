@@ -264,6 +264,9 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-semibold text-slate-900">{cond.name}</span>
+                            {cond.validation_name && (
+                              <span className="text-2xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{cond.validation_name}</span>
+                            )}
                             <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ${meta.chip || 'bg-slate-100 text-slate-600'}`}>{meta.label || cond.type}</span>
                             {!cond.enabled && <span className="text-2xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">Disabled</span>}
                           </div>

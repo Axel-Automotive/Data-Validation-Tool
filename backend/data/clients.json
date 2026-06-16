@@ -35,6 +35,12 @@
       "id": "71775fc8-b13f-4a31-b803-8da0906a045c",
       "name": "Tropical",
       "conditions": []
+    },
+    {
+      "id": "0398d1e9-080d-429b-9ea5-740a05396466",
+      "name": "Fredbeans",
+      "conditions": [],
+      "recipients": []
     }
   ]
 }

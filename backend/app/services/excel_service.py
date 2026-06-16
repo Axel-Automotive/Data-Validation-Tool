@@ -600,11 +600,13 @@ def run_all_conditions(
     return result_id, [
         {"condition_id": r["condition"]["id"],
          "condition_name": r["condition"]["name"],
+         "validation_name": r["condition"].get("validation_name", ""),
          "type": r["condition"]["type"],
          "metrics": r["result"]["metrics"],
          "result_id": r["result"]["result_id"]}
         for r in results
     ] + [{"condition_id": e["condition"]["id"],
           "condition_name": e["condition"]["name"],
+          "validation_name": e["condition"].get("validation_name", ""),
           "type": e["condition"]["type"],
           "error": e["error"]} for e in errors]

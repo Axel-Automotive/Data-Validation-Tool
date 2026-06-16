@@ -6,6 +6,7 @@ import uuid
 class Condition(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
+    validation_name: str = ""   # e.g. the store this validation belongs to
     type: str           # "sheet_diff" | "stacked" | "calc_diff" | "custom_rule"
     enabled: bool = True
     # type-specific config stored as a flexible dict:
@@ -38,6 +39,7 @@ class EmailSettingsRequest(BaseModel):
 
 class ConditionUpsertRequest(BaseModel):
     name: str
+    validation_name: str = ""
     type: str
     enabled: bool = True
     config: dict = Field(default_factory=dict)
