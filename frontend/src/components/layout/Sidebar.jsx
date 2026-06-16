@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Zap, ChevronDown, LayoutDashboard, GitCompare,
   Layers, TrendingUp, Settings, Plus, Check, X,
-  Users, CalendarClock,
+  Users, CalendarClock, History,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
 
@@ -12,13 +12,14 @@ const NAV = [
   { id: 'stacked',    label: 'Stacked Comparison',  Icon: Layers },
   { id: 'calc-diff',  label: 'Calc. Difference',    Icon: TrendingUp },
   { id: 'schedules',  label: 'Schedules',           Icon: CalendarClock },
+  { id: 'runs',       label: 'Run History',         Icon: History },
 ]
 
 const WIDTH = 256
 
 function SbLabel({ children }) {
   return (
-    <p className="text-2xs font-semibold uppercase tracking-widest text-slate-400 px-3 mb-1.5 mt-5 first:mt-0">
+    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 px-3 mb-2 mt-6 first:mt-0">
       {children}
     </p>
   )
@@ -62,39 +63,40 @@ export default function Sidebar({
         </div>
 
         {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto main-scroll py-3 space-y-0.5">
+        <div className="flex-1 overflow-y-auto main-scroll py-3">
           <SbLabel>Navigation</SbLabel>
-          {NAV.map(({ id, label, Icon }) => {
-            const active = currentPage === id
-            return (
-              <div key={id} className="px-2">
+          <div className="px-2 space-y-1">
+            {NAV.map(({ id, label, Icon }) => {
+              const active = currentPage === id
+              return (
                 <button
+                  key={id}
                   onClick={() => onNavigate(id)}
                   className={[
-                    'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left',
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left',
                     active ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
                   ].join(' ')}
                 >
-                  <Icon size={15} className={active ? 'text-brand-600' : 'text-slate-400'} />
+                  <Icon size={17} className={active ? 'text-brand-600' : 'text-slate-400'} />
                   {label}
                 </button>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
 
-          <div className="mx-3 my-3 border-t border-slate-100" />
+          <div className="mx-3 my-5 border-t border-slate-100" />
 
           <SbLabel>Client</SbLabel>
           <div className="px-3">
             <div className="relative">
-              <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <select
                 value={selectedClient?.id || ''}
                 onChange={e => {
                   const c = clients.find(c => c.id === e.target.value)
                   if (c) onSelectClient(c)
                 }}
-                className="w-full appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg pl-8 pr-7 py-2 text-xs focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 cursor-pointer transition-colors"
+                className="w-full appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg pl-9 pr-7 py-2.5 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 cursor-pointer transition-colors"
               >
                 {clients.length === 0
                   ? <option value="">No clients</option>
@@ -123,15 +125,15 @@ export default function Sidebar({
               </div>
             ) : (
               <button onClick={() => setAdding(true)}
-                className="flex items-center gap-1.5 mt-2 text-2xs font-medium text-slate-400 hover:text-brand-600 transition-colors">
-                <Plus size={11} /> Add client
+                className="flex items-center gap-1.5 mt-2.5 text-xs font-medium text-slate-400 hover:text-brand-600 transition-colors">
+                <Plus size={13} /> Add client
               </button>
             )}
           </div>
 
-          <div className="mx-3 my-3 border-t border-slate-100" />
+          <div className="mx-3 my-5 border-t border-slate-100" />
           <div className="px-3">
-            <p className="text-2xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               Upload AXEL &amp; DMS files on each page when you run a comparison.
             </p>
           </div>
@@ -142,11 +144,11 @@ export default function Sidebar({
           <button
             onClick={() => onNavigate('settings')}
             className={[
-              'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
               currentPage === 'settings' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
             ].join(' ')}
           >
-            <Settings size={15} className={currentPage === 'settings' ? 'text-brand-600' : 'text-slate-400'} />
+            <Settings size={17} className={currentPage === 'settings' ? 'text-brand-600' : 'text-slate-400'} />
             Settings
           </button>
         </div>

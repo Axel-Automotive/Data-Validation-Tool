@@ -1,5 +1,6 @@
 import io
 import json
+import time
 import uuid
 from pathlib import Path
 
@@ -82,3 +83,35 @@ def _require(file_id: str) -> bytes:
     if not p.exists():
         raise HTTPException(404, "File not found — please re-upload.")
     return p.read_bytes()
+
+
+def cleanup_old_files(max_age_days: int = 30) -> int:
+    """Delete uploaded files older than max_age_days. Returns count removed.
+
+    Files referenced by an enabled schedule are preserved regardless of age.
+    """
+    if not FILES_DIR.exists():
+        return 0
+    try:
+        from app.services import schedule_store
+        pinned = set()
+        for s in schedule_store.get_all():
+            pinned.add(s.get("file_axel_id"))
+            pinned.add(s.get("file_dms_id"))
+    except Exception:
+        pinned = set()
+
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+    for meta in FILES_DIR.glob("*.json"):
+        fid = meta.stem
+        if fid in pinned:
+            continue
+        try:
+            if meta.stat().st_mtime < cutoff:
+                meta.unlink(missing_ok=True)
+                _data_path(fid).unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            pass
+    return removed

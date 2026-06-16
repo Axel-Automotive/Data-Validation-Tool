@@ -6,6 +6,7 @@ const CRUMBS = {
   stacked:     ['Stacked Comparison'],
   'calc-diff': ['Calculation Difference'],
   schedules:   ['Schedules'],
+  runs:        ['Run History'],
   settings:    ['Settings'],
 }
 

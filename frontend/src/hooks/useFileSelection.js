@@ -42,8 +42,16 @@ export default function useFileSelection() {
 
   const filesReady = !!(fileAxel && fileDms && sheetAxel && sheetDms && columnsAxel.length && columnsDms.length)
 
+  // Restore a previously-used file+sheet directly (e.g. remembered per client).
+  const selectAxel = useCallback((info, sheet) => { setFileAxel(info); setSheetAxel(sheet || info?.sheets?.[0] || '') }, [])
+  const selectDms  = useCallback((info, sheet) => { setFileDms(info);  setSheetDms(sheet  || info?.sheets?.[0] || '') }, [])
+  const clear = useCallback(() => {
+    setFileAxel(null); setFileDms(null); setSheetAxel(''); setSheetDms('')
+    setColumnsAxel([]); setColumnsDms([]); setDatasetInfo({ axel: null, dms: null })
+  }, [])
+
   return {
     fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms, datasetInfo, filesReady,
-    setSheetAxel, setSheetDms, onAxelUploaded, onDmsUploaded,
+    setSheetAxel, setSheetDms, onAxelUploaded, onDmsUploaded, selectAxel, selectDms, clear,
   }
 }

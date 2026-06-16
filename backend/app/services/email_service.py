@@ -60,6 +60,38 @@ def clean_recipients(recipients: list[str]) -> list[str]:
     return out
 
 
+def summary_text(client_name: str, conditions: list[dict], heading: str = "") -> str:
+    """Human-readable per-condition summary for the email body."""
+    lines = [heading or f"Validation report for {client_name}.", ""]
+    for c in conditions:
+        name = c.get("condition_name") or "?"
+        if c.get("error"):
+            lines.append(f"  [ERROR] {name}: {c['error']}")
+            continue
+        m = c.get("metrics", {}) or {}
+        rate = m.get("match_rate", m.get("pair_rate", m.get("pass_rate")))
+        matched = m.get("matched", m.get("paired"))
+        bits = []
+        if rate is not None:
+            bits.append(f"{rate}%")
+        if matched is not None:
+            bits.append(f"{matched:,} matched")
+        lines.append(f"  [OK] {name}: " + (" · ".join(bits) if bits else "done"))
+    n_err = sum(1 for c in conditions if c.get("error"))
+    lines += ["", f"Conditions: {len(conditions)} · Errors: {n_err}", "", "The full report is attached."]
+    return "\n".join(lines)
+
+
+def send_test(to: str) -> dict:
+    return send_report(
+        [to],
+        "AXEL Validator — test email",
+        "This is a test email from AXEL Validator. If you received this, "
+        "SMTP is configured correctly.",
+        attachment_bytes=None,
+    )
+
+
 def send_report(
     to: list[str],
     subject: str,

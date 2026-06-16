@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal, Wand2 } from 'lucide-react'
+import { autoMapColumns } from '../../lib/columnMatch'
 
 const TYPES = [
   { id: 'sheet_diff',  label: 'Sheet Difference',      Icon: GitCompare,        desc: 'Row comparison — missing records' },
@@ -65,6 +66,8 @@ function SheetDiffForm({ config, onChange, columnsAxel, columnsDms }) {
   const add    = () => onChange({ ...config, col_pairs: [...pairs, { axel: '', dms: '' }] })
   const remove = i => onChange({ ...config, col_pairs: pairs.filter((_, j) => j !== i) })
   const set    = (i, k, v) => onChange({ ...config, col_pairs: pairs.map((p, j) => j === i ? { ...p, [k]: v } : p) })
+  const canAutoMap = columnsAxel?.length > 0 && columnsDms?.length > 0
+  const autoMap = () => onChange({ ...config, col_pairs: autoMapColumns(columnsAxel, columnsDms) })
 
   return (
     <div>
@@ -73,10 +76,18 @@ function SheetDiffForm({ config, onChange, columnsAxel, columnsDms }) {
           <p className="text-2xs font-semibold uppercase tracking-wider text-slate-500">Column Pairs</p>
           <p className="text-2xs text-slate-400 mt-0.5">Map each AXEL column to its equivalent DMS column</p>
         </div>
-        <button onClick={add}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
-          <Plus size={12} /> Add pair
-        </button>
+        <div className="flex items-center gap-1.5">
+          {canAutoMap && (
+            <button onClick={autoMap} title="Match columns by name automatically"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
+              <Wand2 size={12} /> Auto-map
+            </button>
+          )}
+          <button onClick={add}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={12} /> Add pair
+          </button>
+        </div>
       </div>
 
       {pairs.length === 0 ? (

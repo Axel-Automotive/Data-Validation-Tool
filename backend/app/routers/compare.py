@@ -4,9 +4,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from pydantic import BaseModel as _BaseModel
+
 from app.models import RunConditionRequest, RunAllRequest
 from app.routers.files import load_df
-from app.services import client_store, email_service
+from app.services import client_store, email_service, runs_store
 from app.services.excel_service import (
     get_result,
     run_calc_difference,
@@ -118,26 +120,34 @@ def run_all(req: RunAllRequest):
         if not recipients:
             raise HTTPException(400, "No recipients configured for this client. Add them in Settings.")
         data, filename = get_result(combined_id)
-        n_ok   = sum(1 for c in condition_results if not c.get("error"))
-        n_fail = len(condition_results) - n_ok
-        body = (
-            f"Validation report for {client['name']}.\n\n"
-            f"Conditions run: {len(condition_results)}\n"
-            f"Completed: {n_ok}\n"
-            f"Errors: {n_fail}\n\n"
-            f"The full report is attached."
-        )
+        body = email_service.summary_text(client["name"], condition_results)
         subject = (client.get("email_subject") or "").strip() or f"Validation Report — {client['name']}"
         sent = email_service.send_report(recipients, subject, body, data, filename)
         resp["email_sent"] = True
         resp["email_to"] = sent["recipients"]
 
+    runs_store.record(
+        client_id=client["id"], client_name=client["name"],
+        kind="email" if req.email else "manual",
+        conditions=condition_results, combined_result_id=combined_id,
+        email_to=resp["email_to"],
+        status="ok" if not any(c.get("error") for c in condition_results) else "errors",
+    )
     return resp
 
 
 @router.get("/email/status")
 def email_status():
     return email_service.status()
+
+
+class TestEmailRequest(_BaseModel):
+    to: str
+
+
+@router.post("/email/test")
+def email_test(req: TestEmailRequest):
+    return email_service.send_test(req.to)
 
 
 # ── Download ──────────────────────────────────────────────────────────────────

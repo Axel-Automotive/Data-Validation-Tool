@@ -5,3 +5,6 @@ openpyxl>=3.1.0
 python-multipart>=0.0.9
 python-dotenv>=1.0.0
 APScheduler>=3.10.0
+
+# dev / test
+pytest>=8.0.0

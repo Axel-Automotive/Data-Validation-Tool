@@ -9,6 +9,7 @@ export const updateClient    = (id, name)       => api.put(`/clients/${id}`, { n
 export const deleteClient    = (id)             => api.delete(`/clients/${id}`).then(r => r.data)
 export const updateEmailSettings = (id, recipients, subject) => api.put(`/clients/${id}/email`, { recipients, subject }).then(r => r.data)
 export const getEmailStatus  = ()               => api.get('/compare/email/status').then(r => r.data)
+export const sendTestEmail   = (to)             => api.post('/compare/email/test', { to }).then(r => r.data)
 
 // ── Conditions ────────────────────────────────────────────────────────────────
 export const getConditions   = (clientId)           => api.get(`/clients/${clientId}/conditions`).then(r => r.data)

@@ -1,8 +1,11 @@
 """All Excel comparison logic — ad-hoc and condition-based."""
 from __future__ import annotations
 import io
+import json
 import re
+import time
 import uuid
+from pathlib import Path
 
 import pandas as pd
 from fastapi import HTTPException
@@ -10,18 +13,48 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-# ── Result store ──────────────────────────────────────────────────────────────
-_results: dict[str, tuple[bytes, str]] = {}
+# ── Result store (persisted to disk so download links survive restarts) ────────
+RESULTS_DIR = Path(__file__).parent.parent.parent / "data" / "results"
 
 
 def get_result(result_id: str) -> tuple[bytes, str] | None:
-    return _results.get(result_id)
+    # Guard against path traversal — result_id must be a bare uuid-like token.
+    if not re.fullmatch(r"[A-Za-z0-9\-]+", result_id or ""):
+        return None
+    data_p = RESULTS_DIR / f"{result_id}.xlsx"
+    meta_p = RESULTS_DIR / f"{result_id}.json"
+    if not data_p.exists():
+        return None
+    filename = "Report.xlsx"
+    try:
+        filename = json.loads(meta_p.read_text()).get("filename", filename)
+    except Exception:
+        pass
+    return data_p.read_bytes(), filename
 
 
 def _save_result(data: bytes, filename: str) -> str:
     rid = str(uuid.uuid4())
-    _results[rid] = (data, filename)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    (RESULTS_DIR / f"{rid}.xlsx").write_bytes(data)
+    (RESULTS_DIR / f"{rid}.json").write_text(json.dumps({"filename": filename}))
     return rid
+
+
+def cleanup_old_results(max_age_days: int = 14) -> int:
+    """Delete result files older than max_age_days. Returns count removed."""
+    if not RESULTS_DIR.exists():
+        return 0
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+    for p in RESULTS_DIR.glob("*"):
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────

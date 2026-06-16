@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail } from 'lucide-react'
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
+import { listFiles } from '../api/schedules'
 import useFileSelection from '../hooks/useFileSelection'
 import FileSelectionBar from '../components/common/FileSelectionBar'
 import MetricCard from '../components/common/MetricCard'
 import { toast } from '../lib/toast'
+
+const lastFilesKey = id => `axel-lastfiles-${id}`
 
 const TYPE_META = {
   sheet_diff: { label: 'Sheet Difference',   Icon: GitCompare,  chip: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/60' },
@@ -22,6 +25,38 @@ export default function Dashboard({ selectedClient, onNavigate }) {
   const [combinedId,    setCombinedId]    = useState(null)
   const [error,         setError]         = useState(null)
   const [singleRunning, setSingleRunning] = useState({})
+
+  // Remember the files last used for each client, and restore them on select.
+  useEffect(() => {
+    if (!selectedClient) return
+    const saved = localStorage.getItem(lastFilesKey(selectedClient.id))
+    fs.clear()
+    if (!saved) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const files = await listFiles()
+        if (cancelled) return
+        const { axelId, sheetAxel: sa, dmsId, sheetDms: sd } = JSON.parse(saved)
+        const a = files.find(f => f.id === axelId)
+        const d = files.find(f => f.id === dmsId)
+        if (a) fs.selectAxel(a, sa)
+        if (d) fs.selectDms(d, sd)
+      } catch { /* ignore — user can re-upload */ }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id])
+
+  // Persist the current complete selection for this client.
+  useEffect(() => {
+    if (selectedClient && fileAxel && fileDms && sheetAxel && sheetDms) {
+      localStorage.setItem(lastFilesKey(selectedClient.id), JSON.stringify({
+        axelId: fileAxel.id, sheetAxel, dmsId: fileDms.id, sheetDms,
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id, fileAxel?.id, fileDms?.id, sheetAxel, sheetDms])
 
   const conditions = selectedClient?.conditions || []
   const enabled    = conditions.filter(c => c.enabled)

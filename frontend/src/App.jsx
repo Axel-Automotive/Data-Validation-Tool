@@ -6,6 +6,8 @@ import Header  from './components/layout/Header'
 import Dashboard from './pages/Dashboard'
 import Settings  from './pages/Settings'
 import Schedules from './pages/Schedules'
+import Runs      from './pages/Runs'
+import ErrorBoundary from './components/common/ErrorBoundary'
 import SheetDifference   from './components/tabs/SheetDifference'
 import StackedComparison from './components/tabs/StackedComparison'
 import CalcDifference    from './components/tabs/CalcDifference'
@@ -59,7 +61,7 @@ export default function App() {
         <Header onToggleSidebar={() => setSidebarOpen(o => !o)} page={page} />
 
         {/* Tab bar — shown for ad-hoc comparison pages */}
-        {!['dashboard', 'settings', 'schedules'].includes(page) && (
+        {!['dashboard', 'settings', 'schedules', 'runs'].includes(page) && (
           <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6">
             <div className="flex gap-0">
               {TABS.map(tab => {
@@ -83,27 +85,31 @@ export default function App() {
         )}
 
         <main className="flex-1 overflow-y-auto main-scroll">
-          {page === 'settings' ? (
-            <Settings
-              clients={clients}
-              selectedClient={selectedClient}
-              onSelectClient={setSelectedClient}
-              onClientsChange={refreshClients}
-            />
-          ) : page === 'schedules' ? (
-            <Schedules clients={clients} />
-          ) : page === 'dashboard' ? (
-            <Dashboard
-              selectedClient={selectedClient}
-              onNavigate={setPage}
-            />
-          ) : (
-            <>
-              {page === 'sheet-diff' && <SheetDifference />}
-              {page === 'stacked'    && <StackedComparison />}
-              {page === 'calc-diff'  && <CalcDifference />}
-            </>
-          )}
+          <ErrorBoundary key={page}>
+            {page === 'settings' ? (
+              <Settings
+                clients={clients}
+                selectedClient={selectedClient}
+                onSelectClient={setSelectedClient}
+                onClientsChange={refreshClients}
+              />
+            ) : page === 'schedules' ? (
+              <Schedules clients={clients} />
+            ) : page === 'runs' ? (
+              <Runs />
+            ) : page === 'dashboard' ? (
+              <Dashboard
+                selectedClient={selectedClient}
+                onNavigate={setPage}
+              />
+            ) : (
+              <>
+                {page === 'sheet-diff' && <SheetDifference />}
+                {page === 'stacked'    && <StackedComparison />}
+                {page === 'calc-diff'  && <CalcDifference />}
+              </>
+            )}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

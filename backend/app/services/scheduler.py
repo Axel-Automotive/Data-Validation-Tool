@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.routers.files import load_df
-from app.services import client_store, email_service, schedule_store
+from app.services import client_store, email_service, runs_store, schedule_store
 from app.services.excel_service import get_result, run_all_conditions
 
 _scheduler: BackgroundScheduler | None = None
@@ -90,23 +90,37 @@ def run_schedule(schedule_id: str) -> dict:
         recipients = email_service.clean_recipients(
             s.get("recipients") or client.get("recipients", [])
         )
+        emailed = []
         if recipients:
             data, filename = get_result(combined_id)
-            body = (
-                f"Scheduled validation report for {client['name']} ({s['name']}).\n\n"
-                f"Conditions run: {len(results)}\nErrors: {n_fail}\n\n"
-                f"The full report is attached."
+            body = email_service.summary_text(
+                client["name"], results,
+                heading=f"Scheduled validation report for {client['name']} ({s['name']}).",
             )
             subject = (client.get("email_subject") or "").strip() or f"Scheduled Validation — {client['name']}"
             email_service.send_report(recipients, subject, body, data, filename)
+            emailed = recipients
             status = f"OK — emailed {len(recipients)} recipient(s)" + (f", {n_fail} error(s)" if n_fail else "")
         else:
             status = "Ran — no recipients configured, not emailed"
 
         schedule_store.mark_run(schedule_id, status, when)
+        runs_store.record(
+            client_id=client["id"], client_name=client["name"], kind="scheduled",
+            conditions=results, combined_result_id=combined_id, email_to=emailed,
+            status="ok" if not n_fail else "errors",
+        )
         return {"ok": True, "status": status, "combined_result_id": combined_id}
 
     except Exception as e:
         status = f"Error: {e}"
         schedule_store.mark_run(schedule_id, status, when)
+        try:
+            client_name = (client_store.get_client(s["client_id"]) or {}).get("name", "?")
+        except Exception:
+            client_name = "?"
+        runs_store.record(
+            client_id=s.get("client_id", ""), client_name=client_name, kind="scheduled",
+            conditions=[], combined_result_id=None, status="failed",
+        )
         return {"ok": False, "status": status}
