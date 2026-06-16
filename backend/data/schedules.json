@@ -1,3 +1,26 @@
 {
-  "schedules": []
+  "schedules": [
+    {
+      "name": "efsfg",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "file_axel_id": "4c72ebf7-4561-4b07-b531-236fd545a571",
+      "file_dms_id": "5aedbd60-3b94-4e75-acc8-b3adf9736fc7",
+      "sheet_axel": "In_A_Not_in_B",
+      "sheet_dms": "In_A_Not_in_B",
+      "hour": 8,
+      "minute": 0,
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ],
+      "recipients": [],
+      "enabled": true,
+      "id": "4bb2ec3a-ee60-4b85-a29f-3ec4569d529d",
+      "last_run": "2026-06-16 15:45:39",
+      "last_status": "Error: 400: Email is not configured. Set SMTP_USER and SMTP_PASSWORD in backend/.env (see backend/.env.example)."
+    }
+  ]
 }

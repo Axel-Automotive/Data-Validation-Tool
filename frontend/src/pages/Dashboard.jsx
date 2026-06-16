@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail } from 'lucide-react'
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
+import useFileSelection from '../hooks/useFileSelection'
+import FileSelectionBar from '../components/common/FileSelectionBar'
 import MetricCard from '../components/common/MetricCard'
 import { toast } from '../lib/toast'
 
@@ -11,8 +13,9 @@ const TYPE_META = {
   custom_rule:{ label: 'Custom Rule',        Icon: SlidersHorizontal, chip: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/60' },
 }
 
-export default function Dashboard({ selectedClient, fileInfo, filesReady, onNavigate }) {
-  const { fileAxel, fileDms, sheetAxel, sheetDms } = fileInfo
+export default function Dashboard({ selectedClient, onNavigate }) {
+  const fs = useFileSelection()
+  const { fileAxel, fileDms, sheetAxel, sheetDms, filesReady } = fs
   const [running,       setRunning]       = useState(false)
   const [emailing,      setEmailing]      = useState(false)
   const [runResults,    setRunResults]    = useState(null)
@@ -115,11 +118,14 @@ export default function Dashboard({ selectedClient, fileInfo, filesReady, onNavi
         </div>
       </div>
 
+      {/* Source files for this run */}
+      <FileSelectionBar fs={fs} />
+
       {/* Banners */}
       {!filesReady && (
         <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
-          <p className="text-sm text-amber-800">Upload AXEL and DMS files in the sidebar to run validations.</p>
+          <p className="text-sm text-amber-800">Upload AXEL and DMS files above, then pick a sheet for each, to run validations.</p>
         </div>
       )}
       {error && (

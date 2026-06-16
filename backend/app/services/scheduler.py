@@ -97,9 +97,8 @@ def run_schedule(schedule_id: str) -> dict:
                 f"Conditions run: {len(results)}\nErrors: {n_fail}\n\n"
                 f"The full report is attached."
             )
-            email_service.send_report(
-                recipients, f"Scheduled Validation — {client['name']}", body, data, filename
-            )
+            subject = (client.get("email_subject") or "").strip() or f"Scheduled Validation — {client['name']}"
+            email_service.send_report(recipients, subject, body, data, filename)
             status = f"OK — emailed {len(recipients)} recipient(s)" + (f", {n_fail} error(s)" if n_fail else "")
         else:
             status = "Ran — no recipients configured, not emailed"

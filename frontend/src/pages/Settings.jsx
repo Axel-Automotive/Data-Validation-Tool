@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Plus, Trash2, Edit2, Check, X, ToggleLeft, ToggleRight, Users, GitCompare, Layers, TrendingUp, SlidersHorizontal, Mail } from 'lucide-react'
-import { createClient, updateClient, deleteClient, createCondition, updateCondition, deleteCondition, updateRecipients } from '../api/clients'
+import { createClient, updateClient, deleteClient, createCondition, updateCondition, deleteCondition, updateEmailSettings } from '../api/clients'
+import useFileSelection from '../hooks/useFileSelection'
+import FileSelectionBar from '../components/common/FileSelectionBar'
 import ConditionEditor from '../components/settings/ConditionEditor'
 import RecipientsEditor from '../components/settings/RecipientsEditor'
 import { toast } from '../lib/toast'
@@ -27,7 +29,9 @@ function ConditionSummary({ cond }) {
   return null
 }
 
-export default function Settings({ clients, selectedClient, onSelectClient, onClientsChange, columnsAxel, columnsDms }) {
+export default function Settings({ clients, selectedClient, onSelectClient, onClientsChange }) {
+  const fs = useFileSelection()
+  const { columnsAxel, columnsDms } = fs
   const [editingClient,    setEditingClient]    = useState(null)
   const [editClientName,   setEditClientName]   = useState('')
   const [newClientName,    setNewClientName]    = useState('')
@@ -74,13 +78,13 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
     } catch { toast('Failed to delete client', 'error') }
   }
 
-  const handleSaveRecipients = async (recipients) => {
+  const handleSaveEmail = async ({ recipients, subject }) => {
     if (!selectedClient) return
     try {
-      await updateRecipients(selectedClient.id, recipients)
+      await updateEmailSettings(selectedClient.id, recipients, subject)
       await onClientsChange()
-      toast('Recipients saved', 'success')
-    } catch (e) { toast(e.response?.data?.detail || 'Failed to save recipients', 'error') }
+      toast('Email settings saved', 'success')
+    } catch (e) { toast(e.response?.data?.detail || 'Failed to save email settings', 'error') }
   }
 
   const handleSaveCondition = async (body) => {
@@ -213,11 +217,16 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
               </button>
             </div>
 
-            {/* Report recipients */}
+            {/* Report email settings */}
             <RecipientsEditor
               key={selectedClient.id}
               recipients={selectedClient.recipients || []}
-              onSave={handleSaveRecipients} />
+              subject={selectedClient.email_subject || ''}
+              clientName={selectedClient.name}
+              onSave={handleSaveEmail} />
+
+            {/* Source files — upload to get column suggestions for conditions */}
+            <FileSelectionBar fs={fs} />
 
             {/* Inline editor */}
             {editingCondition && (

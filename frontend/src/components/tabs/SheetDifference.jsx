@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Play, Download, Info, GitCompare, XCircle } from 'lucide-react'
 import { runSheetDiff, downloadUrl } from '../../api/client'
+import useFileSelection from '../../hooks/useFileSelection'
+import FileSelectionBar from '../common/FileSelectionBar'
 import ColumnSelector from '../common/ColumnSelector'
 import MetricCard from '../common/MetricCard'
 import DataTable from '../common/DataTable'
 
-export default function SheetDifference({ fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms }) {
+export default function SheetDifference() {
+  const fs = useFileSelection()
+  const { fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms, filesReady } = fs
   const [selAxel,  setSelAxel]  = useState([])
   const [selDms,   setSelDms]   = useState([])
   const [running,  setRunning]  = useState(false)
@@ -13,13 +17,10 @@ export default function SheetDifference({ fileAxel, fileDms, sheetAxel, sheetDms
   const [error,    setError]    = useState(null)
   const [preview,  setPreview]  = useState('notInDms')
 
-  // Reset selections + results when the underlying columns change (e.g. user
-  // switched sheets in the sidebar), so we never run with stale column names.
+  // Reset selections + results when the underlying columns change (new sheet/file).
   useEffect(() => {
     setSelAxel([]); setSelDms([]); setResult(null); setError(null)
   }, [columnsAxel, columnsDms])
-
-  const filesReady = fileAxel && fileDms && sheetAxel && sheetDms
 
   const handleRun = async () => {
     if (selAxel.length === 0) { setError('Select at least one column from each file.'); return }
@@ -60,6 +61,8 @@ export default function SheetDifference({ fileAxel, fileDms, sheetAxel, sheetDms
 
       {/* ── Content ── */}
       <div className="p-6 space-y-5 max-w-4xl">
+        <FileSelectionBar fs={fs} />
+
         {error && (
           <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
             <XCircle size={14} className="flex-shrink-0" /> {error}
@@ -70,8 +73,8 @@ export default function SheetDifference({ fileAxel, fileDms, sheetAxel, sheetDms
           <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
             <Info size={15} className="text-slate-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-slate-700">Files not uploaded</p>
-              <p className="text-sm text-slate-500 mt-0.5">Upload AXEL and DMS files using the sidebar, then select a sheet to continue.</p>
+              <p className="text-sm font-medium text-slate-700">Upload both files to continue</p>
+              <p className="text-sm text-slate-500 mt-0.5">Upload AXEL and DMS files above, then pick a sheet for each.</p>
             </div>
           </div>
         ) : (

@@ -22,6 +22,7 @@ class Client(BaseModel):
     name: str
     conditions: list[Condition] = Field(default_factory=list)
     recipients: list[str] = Field(default_factory=list)   # report email recipients
+    email_subject: str = ""                               # custom subject (blank → default)
 
 
 # ── Request / Response shapes ─────────────────────────────────────────────────
@@ -30,8 +31,9 @@ class ClientCreateRequest(BaseModel):
     name: str
 
 
-class RecipientsRequest(BaseModel):
+class EmailSettingsRequest(BaseModel):
     recipients: list[str] = Field(default_factory=list)
+    subject: str = ""
 
 
 class ConditionUpsertRequest(BaseModel):

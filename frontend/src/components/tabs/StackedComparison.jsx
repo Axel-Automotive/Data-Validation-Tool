@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Play, Download, Info, XCircle, ChevronDown } from 'lucide-react'
 import { runStacked, downloadUrl } from '../../api/client'
+import useFileSelection from '../../hooks/useFileSelection'
+import FileSelectionBar from '../common/FileSelectionBar'
 import MetricCard from '../common/MetricCard'
 import DataTable from '../common/DataTable'
 
@@ -23,7 +25,9 @@ function ColSelect({ value, onChange, options, placeholder }) {
   )
 }
 
-export default function StackedComparison({ fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms }) {
+export default function StackedComparison() {
+  const fs = useFileSelection()
+  const { fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms, filesReady } = fs
   const [nameAxel,    setNameAxel]    = useState('AXEL')
   const [nameDms,     setNameDms]     = useState('DMS')
   const [controlAxel, setControlAxel] = useState('')
@@ -36,8 +40,6 @@ export default function StackedComparison({ fileAxel, fileDms, sheetAxel, sheetD
   useEffect(() => {
     setControlAxel(''); setControlDms(''); setResult(null); setError(null)
   }, [columnsAxel, columnsDms])
-
-  const filesReady = fileAxel && fileDms && sheetAxel && sheetDms
 
   const handleRun = async () => {
     if (!controlAxel) { setError('Select a control column for AXEL.'); return }
@@ -79,6 +81,8 @@ export default function StackedComparison({ fileAxel, fileDms, sheetAxel, sheetD
 
       {/* ── Content ── */}
       <div className="p-6 space-y-5 max-w-4xl">
+        <FileSelectionBar fs={fs} />
+
         {error && (
           <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
             <XCircle size={14} className="flex-shrink-0" /> {error}
@@ -89,8 +93,8 @@ export default function StackedComparison({ fileAxel, fileDms, sheetAxel, sheetD
           <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
             <Info size={15} className="text-slate-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-slate-700">Files not uploaded</p>
-              <p className="text-sm text-slate-500 mt-0.5">Upload AXEL and DMS files using the sidebar, then select a sheet to continue.</p>
+              <p className="text-sm font-medium text-slate-700">Upload both files to continue</p>
+              <p className="text-sm text-slate-500 mt-0.5">Upload AXEL and DMS files above, then pick a sheet for each.</p>
             </div>
           </div>
         ) : (

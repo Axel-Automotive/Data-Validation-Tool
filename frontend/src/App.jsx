@@ -9,7 +9,6 @@ import Schedules from './pages/Schedules'
 import SheetDifference   from './components/tabs/SheetDifference'
 import StackedComparison from './components/tabs/StackedComparison'
 import CalcDifference    from './components/tabs/CalcDifference'
-import { getColumns }    from './api/client'
 import { getClients }    from './api/clients'
 
 const TABS = [
@@ -43,63 +42,6 @@ export default function App() {
       })
       .catch(() => toast('Could not refresh clients.', 'error')), [])
 
-  // ── File / sheet state ────────────────────────────────────────────────────
-  const [fileAxel, setFileAxel] = useState(null)
-  const [fileDms,  setFileDms]  = useState(null)
-  const [sheetAxel, setSheetAxel] = useState('')
-  const [sheetDms,  setSheetDms]  = useState('')
-  const [columnsAxel, setColumnsAxel] = useState([])
-  const [columnsDms,  setColumnsDms]  = useState([])
-  const [datasetInfo, setDatasetInfo] = useState({ axel: null, dms: null })
-
-  useEffect(() => {
-    if (!fileAxel || !sheetAxel) return
-    let stale = false
-    getColumns(fileAxel.id, sheetAxel)
-      .then(info => {
-        if (stale) return                       // ignore out-of-order responses
-        setColumnsAxel(info.columns)
-        setDatasetInfo(p => ({ ...p, axel: info }))
-      })
-      .catch(() => {
-        if (stale) return
-        setColumnsAxel([]); setDatasetInfo(p => ({ ...p, axel: null }))
-        toast('Could not read columns from the AXEL sheet.', 'error')
-      })
-    return () => { stale = true }
-  }, [fileAxel, sheetAxel])
-
-  useEffect(() => {
-    if (!fileDms || !sheetDms) return
-    let stale = false
-    getColumns(fileDms.id, sheetDms)
-      .then(info => {
-        if (stale) return
-        setColumnsDms(info.columns)
-        setDatasetInfo(p => ({ ...p, dms: info }))
-      })
-      .catch(() => {
-        if (stale) return
-        setColumnsDms([]); setDatasetInfo(p => ({ ...p, dms: null }))
-        toast('Could not read columns from the DMS sheet.', 'error')
-      })
-    return () => { stale = true }
-  }, [fileDms, sheetDms])
-
-  const handleAxelUploaded = useCallback(info => {
-    setFileAxel(info); setSheetAxel(info.sheets[0] || '')
-    setColumnsAxel([]); setDatasetInfo(p => ({ ...p, axel: null }))
-  }, [])
-
-  const handleDmsUploaded = useCallback(info => {
-    setFileDms(info); setSheetDms(info.sheets[0] || '')
-    setColumnsDms([]); setDatasetInfo(p => ({ ...p, dms: null }))
-  }, [])
-
-  const filesReady = !!(fileAxel && fileDms && sheetAxel && sheetDms && columnsAxel.length && columnsDms.length)
-
-  const fileInfo = { fileAxel, fileDms, sheetAxel, sheetDms, columnsAxel, columnsDms }
-
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 font-sans">
       <ToastContainer />
@@ -109,15 +51,6 @@ export default function App() {
         selectedClient={selectedClient}
         onSelectClient={setSelectedClient}
         onClientsChange={refreshClients}
-        fileAxel={fileAxel}
-        fileDms={fileDms}
-        sheetAxel={sheetAxel}
-        sheetDms={sheetDms}
-        datasetInfo={datasetInfo}
-        onAxelUploaded={handleAxelUploaded}
-        onDmsUploaded={handleDmsUploaded}
-        onSheetAxelChange={setSheetAxel}
-        onSheetDmsChange={setSheetDms}
         currentPage={page}
         onNavigate={setPage}
       />
@@ -156,41 +89,19 @@ export default function App() {
               selectedClient={selectedClient}
               onSelectClient={setSelectedClient}
               onClientsChange={refreshClients}
-              columnsAxel={columnsAxel}
-              columnsDms={columnsDms}
             />
           ) : page === 'schedules' ? (
             <Schedules clients={clients} />
           ) : page === 'dashboard' ? (
             <Dashboard
               selectedClient={selectedClient}
-              fileInfo={fileInfo}
-              filesReady={filesReady}
               onNavigate={setPage}
             />
           ) : (
             <>
-              {page === 'sheet-diff' && (
-                <SheetDifference
-                  fileAxel={fileAxel} fileDms={fileDms}
-                  sheetAxel={sheetAxel} sheetDms={sheetDms}
-                  columnsAxel={columnsAxel} columnsDms={columnsDms}
-                />
-              )}
-              {page === 'stacked' && (
-                <StackedComparison
-                  fileAxel={fileAxel} fileDms={fileDms}
-                  sheetAxel={sheetAxel} sheetDms={sheetDms}
-                  columnsAxel={columnsAxel} columnsDms={columnsDms}
-                />
-              )}
-              {page === 'calc-diff' && (
-                <CalcDifference
-                  fileAxel={fileAxel} fileDms={fileDms}
-                  sheetAxel={sheetAxel} sheetDms={sheetDms}
-                  columnsAxel={columnsAxel} columnsDms={columnsDms}
-                />
-              )}
+              {page === 'sheet-diff' && <SheetDifference />}
+              {page === 'stacked'    && <StackedComparison />}
+              {page === 'calc-diff'  && <CalcDifference />}
             </>
           )}
         </main>

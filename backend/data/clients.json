@@ -27,8 +27,9 @@
         }
       ],
       "recipients": [
-        "anastasia.sukhorebraya@axelautomotive.com"
-      ]
+        "ops@dealer.com"
+      ],
+      "email_subject": "Daily Recon \u2014 Fredbeans"
     },
     {
       "id": "71775fc8-b13f-4a31-b803-8da0906a045c",

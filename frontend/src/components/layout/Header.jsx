@@ -2,9 +2,9 @@ import { Menu, ChevronRight } from 'lucide-react'
 
 const CRUMBS = {
   dashboard:   ['Dashboard'],
-  'sheet-diff': ['Ad-hoc', 'Sheet Difference'],
-  stacked:     ['Ad-hoc', 'Stacked Comparison'],
-  'calc-diff': ['Ad-hoc', 'Calculation Difference'],
+  'sheet-diff': ['Sheet Difference'],
+  stacked:     ['Stacked Comparison'],
+  'calc-diff': ['Calculation Difference'],
   schedules:   ['Schedules'],
   settings:    ['Settings'],
 }

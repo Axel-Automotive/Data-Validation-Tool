@@ -51,12 +51,13 @@ def create_client(name: str) -> dict:
         return client
 
 
-def update_recipients(client_id: str, recipients: list[str]) -> dict | None:
+def update_email_settings(client_id: str, recipients: list[str], subject: str) -> dict | None:
     with _lock:
         data = _load()
         for c in data["clients"]:
             if c["id"] == client_id:
                 c["recipients"] = recipients
+                c["email_subject"] = subject
                 _save(data)
                 return c
         return None

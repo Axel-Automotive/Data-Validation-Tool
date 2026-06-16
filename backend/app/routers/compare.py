@@ -127,9 +127,8 @@ def run_all(req: RunAllRequest):
             f"Errors: {n_fail}\n\n"
             f"The full report is attached."
         )
-        sent = email_service.send_report(
-            recipients, f"Validation Report — {client['name']}", body, data, filename
-        )
+        subject = (client.get("email_subject") or "").strip() or f"Validation Report — {client['name']}"
+        sent = email_service.send_report(recipients, subject, body, data, filename)
         resp["email_sent"] = True
         resp["email_to"] = sent["recipients"]
 

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.models import ClientCreateRequest, ConditionUpsertRequest, RecipientsRequest
+from app.models import ClientCreateRequest, ConditionUpsertRequest, EmailSettingsRequest
 from app.services import client_store, email_service
 
 router = APIRouter()
@@ -32,10 +32,10 @@ def delete_client(client_id: str):
     return {"ok": True}
 
 
-@router.put("/{client_id}/recipients")
-def set_recipients(client_id: str, body: RecipientsRequest):
+@router.put("/{client_id}/email")
+def set_email_settings(client_id: str, body: EmailSettingsRequest):
     cleaned = email_service.clean_recipients(body.recipients)
-    c = client_store.update_recipients(client_id, cleaned)
+    c = client_store.update_email_settings(client_id, cleaned, body.subject.strip())
     if not c:
         raise HTTPException(404, "Client not found")
     return c
