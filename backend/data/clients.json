@@ -1,0 +1,39 @@
+{
+  "clients": [
+    {
+      "id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "name": "Fredbeans",
+      "conditions": [
+        {
+          "name": "Difference",
+          "type": "sheet_diff",
+          "enabled": true,
+          "config": {
+            "col_pairs": [
+              {
+                "axel": "Stock\nNo.",
+                "dms": "Stock\nNo."
+              }
+            ]
+          },
+          "id": "a3ede0e3-10d8-4bf9-b948-70958e34e635"
+        },
+        {
+          "name": "stacked",
+          "type": "stacked",
+          "enabled": true,
+          "config": {},
+          "id": "a2aa2a60-aa33-4916-9870-40bfac40a8ee"
+        }
+      ],
+      "recipients": [
+        "anastasia.sukhorebraya@axelautomotive.com"
+      ]
+    },
+    {
+      "id": "71775fc8-b13f-4a31-b803-8da0906a045c",
+      "name": "Tropical",
+      "conditions": []
+    }
+  ]
+}
