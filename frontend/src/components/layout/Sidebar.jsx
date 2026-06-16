@@ -57,7 +57,7 @@ export default function Sidebar({
             <Zap size={15} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900 leading-none">AXEL Validator</p>
+            <p className="text-sm font-bold text-slate-900 leading-none">Axel Validator</p>
             <p className="text-2xs text-slate-400 mt-1">Data Validation Tool</p>
           </div>
         </div>
