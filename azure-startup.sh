@@ -3,9 +3,9 @@ set -e
 
 ROOT=/home/site/wwwroot
 
-# Prefer dependencies bundled by GitHub Actions. Fall back to the Oryx virtualenv
-# if Azure created one during deployment.
-export PYTHONPATH="$ROOT/.python_packages/lib/site-packages:$ROOT/backend:${PYTHONPATH:-}"
+# Prefer dependencies bundled by GitHub Actions. Fall back to the legacy hidden
+# folder and then to the Oryx virtualenv if Azure created one during deployment.
+export PYTHONPATH="$ROOT/python_packages/lib/site-packages:$ROOT/.python_packages/lib/site-packages:$ROOT/backend:${PYTHONPATH:-}"
 
 if [ -f "$ROOT/antenv/bin/activate" ]; then
   . "$ROOT/antenv/bin/activate"
