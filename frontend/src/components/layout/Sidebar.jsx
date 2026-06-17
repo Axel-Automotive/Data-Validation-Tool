@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Zap, ChevronDown, LayoutDashboard, GitCompare,
   Layers, TrendingUp, Settings, Plus, Check, X,
-  Users, CalendarClock, History,
+  Users, CalendarClock, History, Library,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
 
@@ -11,6 +11,7 @@ const NAV = [
   { id: 'sheet-diff', label: 'Sheet Difference',    Icon: GitCompare },
   { id: 'stacked',    label: 'Stacked Comparison',  Icon: Layers },
   { id: 'calc-diff',  label: 'Calc. Difference',    Icon: TrendingUp },
+  { id: 'conditions', label: 'Conditions',          Icon: Library },
   { id: 'schedules',  label: 'Schedules',           Icon: CalendarClock },
   { id: 'runs',       label: 'Run History',         Icon: History },
 ]

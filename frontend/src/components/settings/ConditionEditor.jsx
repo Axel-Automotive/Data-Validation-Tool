@@ -286,13 +286,15 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function ConditionEditor({ initial, columnsAxel, columnsDms, saving, onSave, onCancel }) {
+export default function ConditionEditor({ initial, presetType, lockType, columnsAxel, columnsDms, saving, onSave, onCancel }) {
   const [name,       setName]       = useState(initial?.name    || '')
   const [validation, setValidation] = useState(initial?.validation_name || '')
-  const [type,       setType]       = useState(initial?.type    || 'sheet_diff')
+  const [type,       setType]       = useState(initial?.type    || presetType || 'sheet_diff')
   const [enabled,    setEnabled]    = useState(initial?.enabled ?? true)
   const [config,     setConfig]     = useState(initial?.config  || {})
   const [nameError,  setNameError]  = useState('')
+
+  const typeLabel = TYPES.find(t => t.id === type)?.label || 'Condition'
 
   const changeType = t => { setType(t); setConfig({}) }
 
@@ -307,7 +309,7 @@ export default function ConditionEditor({ initial, columnsAxel, columnsDms, savi
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
         <div>
-          <h4 className="text-sm font-bold text-slate-900">{initial ? 'Edit Condition' : 'New Condition'}</h4>
+          <h4 className="text-sm font-bold text-slate-900">{initial ? `Edit ${typeLabel}` : `New ${typeLabel}`}</h4>
           <p className="text-2xs text-slate-500 mt-0.5">Configure a validation rule for this client</p>
         </div>
         <button onClick={onCancel} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
@@ -329,7 +331,8 @@ export default function ConditionEditor({ initial, columnsAxel, columnsDms, savi
           </div>
         </div>
 
-        {/* Type selector */}
+        {/* Type selector — hidden when the type was chosen via a dedicated button */}
+        {!lockType && (
         <div>
           <Label>Comparison Type</Label>
           <div className="grid grid-cols-2 gap-2 mt-1.5">
@@ -350,6 +353,7 @@ export default function ConditionEditor({ initial, columnsAxel, columnsDms, savi
             })}
           </div>
         </div>
+        )}
 
         {/* Config */}
         <div className="border border-slate-100 rounded-xl bg-slate-50 p-4">

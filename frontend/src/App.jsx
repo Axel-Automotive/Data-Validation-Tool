@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Settings  from './pages/Settings'
 import Schedules from './pages/Schedules'
 import Runs      from './pages/Runs'
+import Conditions from './pages/Conditions'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import SheetDifference   from './components/tabs/SheetDifference'
 import StackedComparison from './components/tabs/StackedComparison'
@@ -61,7 +62,7 @@ export default function App() {
         <Header onToggleSidebar={() => setSidebarOpen(o => !o)} page={page} />
 
         {/* Tab bar — shown for ad-hoc comparison pages */}
-        {!['dashboard', 'settings', 'schedules', 'runs'].includes(page) && (
+        {!['dashboard', 'settings', 'schedules', 'runs', 'conditions'].includes(page) && (
           <div className="flex-shrink-0 border-b border-slate-200 bg-white px-6">
             <div className="flex gap-0">
               {TABS.map(tab => {
@@ -97,6 +98,8 @@ export default function App() {
               <Schedules clients={clients} />
             ) : page === 'runs' ? (
               <Runs />
+            ) : page === 'conditions' ? (
+              <Conditions />
             ) : page === 'dashboard' ? (
               <Dashboard
                 selectedClient={selectedClient}

@@ -16,7 +16,8 @@
               }
             ]
           },
-          "id": "a3ede0e3-10d8-4bf9-b948-70958e34e635"
+          "id": "a3ede0e3-10d8-4bf9-b948-70958e34e635",
+          "validation_name": ""
         },
         {
           "name": "stacked",
@@ -26,21 +27,13 @@
           "id": "a2aa2a60-aa33-4916-9870-40bfac40a8ee"
         }
       ],
-      "recipients": [
-        "ops@dealer.com"
-      ],
+      "recipients": [],
       "email_subject": "Daily Recon \u2014 Fredbeans"
     },
     {
       "id": "71775fc8-b13f-4a31-b803-8da0906a045c",
       "name": "Tropical",
       "conditions": []
-    },
-    {
-      "id": "0398d1e9-080d-429b-9ea5-740a05396466",
-      "name": "Fredbeans",
-      "conditions": [],
-      "recipients": []
     }
   ]
 }

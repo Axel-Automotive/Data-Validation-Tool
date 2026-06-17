@@ -8,7 +8,7 @@ from pydantic import BaseModel as _BaseModel
 
 from app.models import RunConditionRequest, RunAllRequest
 from app.routers.files import load_df
-from app.services import client_store, email_service, runs_store
+from app.services import client_store, email_service, runs_store, shared_store
 from app.services.excel_service import (
     get_result,
     run_calc_difference,
@@ -90,6 +90,8 @@ def run_one_condition(req: RunConditionRequest):
 
     cond = next((c for c in client.get("conditions", []) if c["id"] == req.condition_id), None)
     if not cond:
+        cond = shared_store.get(req.condition_id)   # may be a shared condition
+    if not cond:
         raise HTTPException(404, "Condition not found")
 
     df_axel = load_df(req.file_axel_id, req.sheet_axel)
@@ -106,8 +108,11 @@ def run_all(req: RunAllRequest):
     df_axel = load_df(req.file_axel_id, req.sheet_axel)
     df_dms  = load_df(req.file_dms_id,  req.sheet_dms)
 
+    # Shared conditions apply to every client, run before the client's own.
+    all_conditions = shared_store.get_all() + client.get("conditions", [])
+
     combined_id, condition_results = run_all_conditions(
-        client.get("conditions", []), df_axel, df_dms
+        all_conditions, df_axel, df_dms
     )
 
     resp = {"combined_result_id": combined_id, "conditions": condition_results,

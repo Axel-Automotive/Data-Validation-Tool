@@ -91,7 +91,7 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
     if (!selectedClient) return
     setSaving(true)
     try {
-      if (editingCondition && editingCondition !== 'new') {
+      if (editingCondition?.id) {
         await updateCondition(selectedClient.id, editingCondition.id, body)
         toast('Condition updated', 'success')
       } else {
@@ -203,18 +203,12 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
         ) : (
           <div className="p-6 space-y-5 max-w-3xl">
             {/* Panel header */}
-            <div className="flex items-center justify-between pb-5 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">{selectedClient.name}</h3>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {conditions.length} condition{conditions.length !== 1 ? 's' : ''}
-                  {columnsAxel.length > 0 ? ` · ${columnsAxel.length} AXEL / ${columnsDms.length} DMS columns loaded` : ' · upload files for column suggestions'}
-                </p>
-              </div>
-              <button onClick={() => setEditingCondition('new')}
-                className="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-brand-700 transition-colors">
-                <Plus size={13} /> Add Condition
-              </button>
+            <div className="pb-5 border-b border-slate-200">
+              <h3 className="text-base font-bold text-slate-900">{selectedClient.name}</h3>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {conditions.length} condition{conditions.length !== 1 ? 's' : ''}
+                {columnsAxel.length > 0 ? ` · ${columnsAxel.length} AXEL / ${columnsDms.length} DMS columns loaded` : ' · upload files for column suggestions'}
+              </p>
             </div>
 
             {/* Report email settings */}
@@ -228,11 +222,31 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
             {/* Source files — upload to get column suggestions for conditions */}
             <FileSelectionBar fs={fs} />
 
+            {/* Add a validation condition — one button per type */}
+            {!editingCondition && (
+              <div>
+                <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Add a validation condition</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(TYPE_META).map(([id, m]) => {
+                    const Icon = m.Icon
+                    return (
+                      <button key={id} onClick={() => setEditingCondition({ _new: true, type: id })}
+                        className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium px-3 py-1.5 rounded-lg hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors">
+                        <Plus size={12} /> <Icon size={14} /> {m.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Inline editor */}
             {editingCondition && (
               <ConditionEditor
-                key={editingCondition === 'new' ? 'new' : editingCondition.id}
-                initial={editingCondition === 'new' ? null : editingCondition}
+                key={editingCondition.id || `new-${editingCondition.type}`}
+                initial={editingCondition.id ? editingCondition : null}
+                presetType={editingCondition._new ? editingCondition.type : undefined}
+                lockType={!!editingCondition._new}
                 columnsAxel={columnsAxel} columnsDms={columnsDms}
                 saving={saving} onSave={handleSaveCondition}
                 onCancel={() => setEditingCondition(null)} />
@@ -243,7 +257,7 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-12 text-center">
                 <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><GitCompare size={20} className="text-slate-300" /></div>
                 <p className="font-semibold text-slate-900 mb-1">No conditions yet</p>
-                <p className="text-sm text-slate-500">Click "Add Condition" to define validation rules.</p>
+                <p className="text-sm text-slate-500">Use the buttons above to add a validation condition.</p>
               </div>
             )}
 

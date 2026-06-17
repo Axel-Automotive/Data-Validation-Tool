@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.routers.files import load_df
-from app.services import client_store, email_service, runs_store, schedule_store
+from app.services import client_store, email_service, runs_store, schedule_store, shared_store
 from app.services.excel_service import get_result, run_all_conditions
 
 _scheduler: BackgroundScheduler | None = None
@@ -84,7 +84,8 @@ def run_schedule(schedule_id: str) -> dict:
         df_axel = load_df(s["file_axel_id"], s["sheet_axel"])
         df_dms  = load_df(s["file_dms_id"],  s["sheet_dms"])
 
-        combined_id, results = run_all_conditions(client.get("conditions", []), df_axel, df_dms)
+        all_conditions = shared_store.get_all() + client.get("conditions", [])
+        combined_id, results = run_all_conditions(all_conditions, df_axel, df_dms)
         n_fail = sum(1 for c in results if c.get("error"))
 
         recipients = email_service.clean_recipients(

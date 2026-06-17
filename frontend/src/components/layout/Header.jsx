@@ -5,6 +5,7 @@ const CRUMBS = {
   'sheet-diff': ['Sheet Difference'],
   stacked:     ['Stacked Comparison'],
   'calc-diff': ['Calculation Difference'],
+  conditions:  ['Conditions'],
   schedules:   ['Schedules'],
   runs:        ['Run History'],
   settings:    ['Settings'],

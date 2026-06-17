@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail } from 'lucide-react'
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
 import { listFiles } from '../api/schedules'
+import { getShared } from '../api/shared'
 import useFileSelection from '../hooks/useFileSelection'
 import FileSelectionBar from '../components/common/FileSelectionBar'
 import MetricCard from '../components/common/MetricCard'
@@ -58,7 +59,16 @@ export default function Dashboard({ selectedClient, onNavigate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClient?.id, fileAxel?.id, fileDms?.id, sheetAxel, sheetDms])
 
-  const conditions = selectedClient?.conditions || []
+  const [sharedConds, setSharedConds] = useState([])
+  useEffect(() => {
+    getShared().then(s => setSharedConds(Array.isArray(s) ? s : [])).catch(() => {})
+  }, [])
+
+  // Shared conditions apply to every client and run first.
+  const conditions = [
+    ...sharedConds.map(c => ({ ...c, _shared: true })),
+    ...(selectedClient?.conditions || []),
+  ]
   const enabled    = conditions.filter(c => c.enabled)
   const recipients = selectedClient?.recipients || []
 
@@ -230,6 +240,7 @@ export default function Dashboard({ selectedClient, onNavigate }) {
                         </div>
                         <div>
                           <span className="font-semibold text-slate-900">{cond.name}</span>
+                          {cond._shared && <span className="ml-2 text-2xs font-medium text-violet-700 bg-violet-50 ring-1 ring-violet-200/60 px-1.5 py-0.5 rounded-full">Shared</span>}
                           {!cond.enabled && <span className="ml-2 text-2xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">off</span>}
                         </div>
                       </div>
