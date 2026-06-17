@@ -109,6 +109,47 @@ files, and reports across restarts.
 > The scheduler runs inside the backend process, so the container must stay up
 > for schedules to fire. Schedule times use the container's local timezone.
 
+## Azure App Service deployment
+
+This repo is configured for the Linux App Service named `data-validator`.
+GitHub Actions builds `frontend/dist`, tests the backend, and deploys the whole
+app with the Azure publish profile.
+
+Add the publish profile in GitHub:
+
+1. Azure Portal -> App Service `data-validator` -> Download publish profile.
+2. GitHub repo -> Settings -> Secrets and variables -> Actions -> New repository secret.
+3. Name: `AZURE_WEBAPP_PUBLISH_PROFILE`
+4. Value: paste the entire publish profile XML.
+
+Set these Azure App Service settings:
+
+```ini
+SCM_DO_BUILD_DURING_DEPLOYMENT=true
+ENABLE_ORYX_BUILD=true
+SMTP_HOST=smtp.office365.com
+SMTP_PORT=587
+SMTP_USER=you@axelautomotive.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=
+SMTP_FROM_NAME=AXEL Validator
+```
+
+Only the SMTP settings are app-specific secrets; omit them if email is not being
+used yet. Set the App Service startup command to:
+
+```bash
+bash /home/site/wwwroot/azure-startup.sh
+```
+
+If the root URL opens as a browser "JSON View" with a FastAPI response instead
+of the React website, the frontend build was not deployed. The GitHub Actions
+workflow in `.github/workflows/main_data-validator.yml` fixes that by building
+the Vite frontend before deployment.
+
+Leave `WEBSITE_RUN_FROM_PACKAGE` unset for this app, because it writes uploaded
+files and generated reports under `backend/data`.
+
 ---
 
 ## API (selected)
