@@ -110,7 +110,9 @@ jobs:
               (p for p in profiles if p.attrib.get("publishMethod") == "ZipDeploy"),
               profiles[0],
           )
-          host = profile.attrib["publishUrl"].split(":")[0]
+          # publishUrl may be "host", "host:443", or "https://host:443/path";
+          # strip any scheme, path, and port to get the bare Kudu hostname.
+          host = profile.attrib["publishUrl"].split("://")[-1].split("/")[0].split(":")[0]
           password = profile.attrib["userPWD"]
           print(f"::add-mask::{password}")
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
