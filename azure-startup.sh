@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-ROOT=/home/site/wwwroot
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR=/home/LogFiles
 
 mkdir -p "$LOG_DIR"

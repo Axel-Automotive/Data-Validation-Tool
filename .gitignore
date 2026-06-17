@@ -19,6 +19,8 @@ backend/data/files/
 backend/data/results/
 row_comparison_output.xlsx
 .pytest_cache/
+azure-logs*/
+azure-logs*.zip
 
 # OS / editor
 .DS_Store

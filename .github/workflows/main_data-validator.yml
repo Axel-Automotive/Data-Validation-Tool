@@ -87,14 +87,6 @@ jobs:
         with:
           name: app
 
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          slot-name: Production
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE || secrets.AZUREAPPSERVICE_PUBLISHPROFILE_6D530A8F62404424B0A65319AD61C59C }}
-
       - name: Prepare Kudu credentials
         shell: bash
         env:
@@ -120,6 +112,31 @@ jobs:
               env.write(f"KUDU_USER={profile.attrib['userName']}\n")
               env.write(f"KUDU_PASS={password}\n")
           PY
+
+      - name: Clean stale Oryx deployment bundle
+        shell: bash
+        run: |
+          payload="$(python - <<'PY'
+          import json
+
+          print(json.dumps({
+              "command": "rm -f /home/site/wwwroot/output.tar.zst /home/site/wwwroot/oryx-manifest.toml",
+              "dir": "/home/site/wwwroot",
+          }))
+          PY
+          )"
+          curl -sS -u "$KUDU_USER:$KUDU_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://$KUDU_HOST/api/command"
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: Production
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE || secrets.AZUREAPPSERVICE_PUBLISHPROFILE_6D530A8F62404424B0A65319AD61C59C }}
 
       - name: Smoke test deployed app
         shell: bash

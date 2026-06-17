@@ -125,8 +125,11 @@ Add the publish profile in GitHub:
 Set these Azure App Service settings:
 
 ```ini
-SCM_DO_BUILD_DURING_DEPLOYMENT=true
-ENABLE_ORYX_BUILD=true
+SCM_DO_BUILD_DURING_DEPLOYMENT=false
+ENABLE_ORYX_BUILD=false
+PORT=8000
+WEBSITES_PORT=8000
+PYTHONPATH=/home/site/wwwroot/python_packages/lib/site-packages:/home/site/wwwroot/backend
 SMTP_HOST=smtp.office365.com
 SMTP_PORT=587
 SMTP_USER=you@axelautomotive.com
@@ -139,7 +142,7 @@ Only the SMTP settings are app-specific secrets; omit them if email is not being
 used yet. Set the App Service startup command to:
 
 ```bash
-bash /home/site/wwwroot/azure-startup.sh
+python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
 ```
 
 If the root URL opens as a browser "JSON View" with a FastAPI response instead
