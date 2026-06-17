@@ -146,7 +146,9 @@ jobs:
             [ -n "$href" ] || continue
             echo
             echo "---- $href ----"
-            curl -sS -u "$KUDU_USER:$KUDU_PASS" "$href" | tail -n 220 || true
+            curl -sS -u "$KUDU_USER:$KUDU_PASS" "$href" \
+              | grep -E -i "azure startup|startup|oryx|uvicorn|bash|python|error|failed|no such|module|container|port" \
+              | tail -n 260 || true
           done < <(
             DOCKER_INDEX="$docker_index" python - <<'PY'
           import json
@@ -169,27 +171,24 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Kudu command diagnostics"
-          payload="$(python - <<'PY'
+          for kudu_cmd in \
+            "pwd" \
+            "ls -la /home/site/wwwroot" \
+            "ls -la /home/site/wwwroot/python_packages/lib/site-packages" \
+            "ls -la /home/site/wwwroot/backend" \
+            "printenv"; do
+            echo
+            echo "---- $kudu_cmd ----"
+            payload="$(KUDU_CMD="$kudu_cmd" python - <<'PY'
           import json
-          import shlex
+          import os
 
-          script = r'''
-          set -e
-          echo "wwwroot:"
-          ls -la /home/site/wwwroot
-          echo
-          echo "python_packages:"
-          ls -la /home/site/wwwroot/python_packages/lib/site-packages 2>/dev/null | sed -n '1,60p' || true
-          echo
-          echo "selected env:"
-          printenv | sort | grep -E '^(PORT|WEBSITES_PORT|WEBSITE_SITE_NAME|PYTHONPATH|VIRTUAL_ENV|SCM_DO_BUILD_DURING_DEPLOYMENT|ENABLE_ORYX_BUILD)=' || true
-          '''
-          command = "bash -lc " + shlex.quote(script)
-          print(json.dumps({"command": command, "dir": "/home/site/wwwroot"}))
+          print(json.dumps({"command": os.environ["KUDU_CMD"], "dir": "/home/site/wwwroot"}))
           PY
           )"
-          curl -sS -u "$KUDU_USER:$KUDU_PASS" \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "https://$KUDU_HOST/api/command" || true
+            curl -sS -u "$KUDU_USER:$KUDU_PASS" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              "https://$KUDU_HOST/api/command" || true
+          done
           echo "::endgroup::"
