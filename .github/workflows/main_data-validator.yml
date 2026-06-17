@@ -44,15 +44,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           pytest backend/tests/ -q
+          pip install --target ".python_packages/lib/site-packages" -r backend/requirements.txt
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
           name: app
+          include-hidden-files: true
           path: |
             .
             !.git/
+            !.env
+            !.idea/
+            !.pytest_cache/
+            !.venv/
             !frontend/node_modules/
+            !frontend/.npm-cache/
 
   deploy:
     runs-on: ubuntu-latest
