@@ -8,6 +8,7 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: data-validator
+  AZURE_WEBAPP_URL: https://data-validator-gdcvhndea2ftb3he.westcentralus-01.azurewebsites.net
   NODE_VERSION: 20.x
   PYTHON_VERSION: "3.12"
 
@@ -93,3 +94,79 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: Production
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE || secrets.AZUREAPPSERVICE_PUBLISHPROFILE_6D530A8F62404424B0A65319AD61C59C }}
+
+      - name: Prepare Kudu credentials
+        shell: bash
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE || secrets.AZUREAPPSERVICE_PUBLISHPROFILE_6D530A8F62404424B0A65319AD61C59C }}
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+
+          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
+          profiles = root.findall(".//publishProfile")
+          profile = next(
+              (p for p in profiles if p.attrib.get("publishMethod") == "ZipDeploy"),
+              profiles[0],
+          )
+          host = profile.attrib["publishUrl"].split(":")[0]
+          password = profile.attrib["userPWD"]
+          print(f"::add-mask::{password}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"KUDU_HOST={host}\n")
+              env.write(f"KUDU_USER={profile.attrib['userName']}\n")
+              env.write(f"KUDU_PASS={password}\n")
+          PY
+
+      - name: Smoke test deployed app
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            body="$(mktemp)"
+            code="$(curl -k -sS -m 15 -o "$body" -w "%{http_code}" "$AZURE_WEBAPP_URL/health" || true)"
+            echo "Attempt $attempt: HTTP $code"
+            cat "$body"
+            echo
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Print Kudu diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "::group::Docker logs"
+          curl -sS -u "$KUDU_USER:$KUDU_PASS" "https://$KUDU_HOST/api/logs/docker" || true
+          echo "::endgroup::"
+
+          echo "::group::Startup log"
+          curl -sS -u "$KUDU_USER:$KUDU_PASS" "https://$KUDU_HOST/api/vfs/LogFiles/startup.log" || true
+          echo "::endgroup::"
+
+          echo "::group::Kudu command diagnostics"
+          payload="$(python - <<'PY'
+          import json
+
+          command = r'''
+          set -e
+          echo "wwwroot:"
+          ls -la /home/site/wwwroot
+          echo
+          echo "python_packages:"
+          ls -la /home/site/wwwroot/python_packages/lib/site-packages 2>/dev/null | sed -n '1,60p' || true
+          echo
+          echo "selected env:"
+          printenv | sort | grep -E '^(PORT|WEBSITES_PORT|WEBSITE_SITE_NAME|PYTHONPATH|VIRTUAL_ENV|SCM_DO_BUILD_DURING_DEPLOYMENT|ENABLE_ORYX_BUILD)=' || true
+          '''
+          print(json.dumps({"command": command, "dir": "/home/site/wwwroot"}))
+          PY
+          )"
+          curl -sS -u "$KUDU_USER:$KUDU_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://$KUDU_HOST/api/command" || true
+          echo "::endgroup::"
