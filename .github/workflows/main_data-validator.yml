@@ -140,7 +140,28 @@ jobs:
         shell: bash
         run: |
           echo "::group::Docker logs"
-          curl -sS -u "$KUDU_USER:$KUDU_PASS" "https://$KUDU_HOST/api/logs/docker" || true
+          docker_index="$(curl -sS -u "$KUDU_USER:$KUDU_PASS" "https://$KUDU_HOST/api/logs/docker" || true)"
+          echo "$docker_index"
+          while IFS= read -r href; do
+            [ -n "$href" ] || continue
+            echo
+            echo "---- $href ----"
+            curl -sS -u "$KUDU_USER:$KUDU_PASS" "$href" | tail -n 220 || true
+          done < <(
+            DOCKER_INDEX="$docker_index" python - <<'PY'
+          import json
+          import os
+
+          try:
+              entries = json.loads(os.environ["DOCKER_INDEX"])
+          except Exception:
+              entries = []
+          for entry in entries:
+              path = entry.get("path", "")
+              if "_scm_" not in path:
+                  print(entry.get("href", ""))
+          PY
+          )
           echo "::endgroup::"
 
           echo "::group::Startup log"
@@ -150,8 +171,9 @@ jobs:
           echo "::group::Kudu command diagnostics"
           payload="$(python - <<'PY'
           import json
+          import shlex
 
-          command = r'''
+          script = r'''
           set -e
           echo "wwwroot:"
           ls -la /home/site/wwwroot
@@ -162,6 +184,7 @@ jobs:
           echo "selected env:"
           printenv | sort | grep -E '^(PORT|WEBSITES_PORT|WEBSITE_SITE_NAME|PYTHONPATH|VIRTUAL_ENV|SCM_DO_BUILD_DURING_DEPLOYMENT|ENABLE_ORYX_BUILD)=' || true
           '''
+          command = "bash -lc " + shlex.quote(script)
           print(json.dumps({"command": command, "dir": "/home/site/wwwroot"}))
           PY
           )"
