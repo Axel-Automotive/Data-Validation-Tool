@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import {
-  Zap, ChevronDown, LayoutDashboard, GitCompare,
+  ChevronDown, LayoutDashboard, GitCompare,
   Layers, TrendingUp, Settings, Plus, Check, X,
   Users, CalendarClock, History, Library,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
+import logoAxel from '../../assets/logo-axel.png'
 
 const NAV = [
   { id: 'dashboard',  label: 'Dashboard',           Icon: LayoutDashboard },
@@ -53,14 +54,11 @@ export default function Sidebar({
       <div className="h-full bg-white flex flex-col border-r border-slate-200" style={{ width: WIDTH }}>
 
         {/* ── Brand ── */}
-        <div className="flex items-center gap-3 px-4 h-14 border-b border-slate-100 flex-shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-            <Zap size={15} className="text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-900 leading-none">Axel Validator</p>
-            <p className="text-2xs text-slate-400 mt-1">Data Validation Tool</p>
-          </div>
+        <div className="flex items-center gap-2 px-4 h-14 border-b border-slate-100 flex-shrink-0">
+          <img src={logoAxel} alt="AXEL" className="h-5 w-auto flex-shrink-0" />
+          <span className="text-base font-semibold tracking-wide text-slate-600">
+            Validator
+          </span>
         </div>
 
         {/* ── Body ── */}
