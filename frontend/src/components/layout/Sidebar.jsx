@@ -54,8 +54,8 @@ export default function Sidebar({
       <div className="h-full bg-white flex flex-col border-r border-slate-200" style={{ width: WIDTH }}>
 
         {/* ── Brand ── */}
-        <div className="flex items-center gap-2 px-4 h-14 border-b border-slate-100 flex-shrink-0">
-          <img src={logoAxel} alt="AXEL" className="h-5 w-auto flex-shrink-0" />
+        <div className="flex items-center gap-2 pl-8 pr-4 h-14 border-b border-slate-100 flex-shrink-0">
+          <img src={logoAxel} alt="AXEL" className="h-4 w-auto flex-shrink-0" />
           <span className="text-base font-semibold tracking-wide text-slate-600">
             Validator
           </span>
