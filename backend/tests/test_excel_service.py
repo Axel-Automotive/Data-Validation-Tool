@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services.excel_service import (  # noqa: E402
     run_sheet_difference, run_calc_difference, run_custom_rule,
-    run_all_conditions, get_result, _sanitize_sheet, _norm_series,
+    run_all_conditions, run_condition, get_result, _sanitize_sheet,
+    _norm_series, _apply_filters,
 )
 from app.services import email_service  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
@@ -121,6 +122,62 @@ def test_run_all_combined_report_full_rows_numeric():
     ws = next(s for s in wb.worksheets if "Rule" in s.title)
     assert ws.max_row - 1 == n                       # not capped at 100
     assert isinstance(ws.cell(row=2, column=2).value, (int, float))
+
+
+# ── Row filtering ──────────────────────────────────────────────────────────────
+
+def test_apply_filters_eq_and_numeric():
+    df = pd.DataFrame({"Status": ["Active", "Closed", "Active"], "Amount": [10, -5, 20]})
+    out = _apply_filters(df, [{"col": "Status", "op": "eq", "value": "Active"}], None)
+    assert list(out["Amount"]) == [10, 20]
+    out = _apply_filters(df, [{"col": "Amount", "op": "gt", "value": 0}], None)
+    assert list(out["Status"]) == ["Active", "Active"]
+
+
+def test_apply_filters_in_and_blank():
+    df = pd.DataFrame({"Branch": ["North", "South", "", "North"]})
+    out = _apply_filters(df, [{"col": "Branch", "op": "in", "value": ["North"]}], None)
+    assert len(out) == 2
+    out = _apply_filters(df, [{"col": "Branch", "op": "not_blank", "value": ""}], None)
+    assert len(out) == 3
+
+
+def test_apply_filters_row_range_is_1_based_inclusive():
+    df = pd.DataFrame({"K": list(range(1, 11))})        # 1..10
+    out = _apply_filters(df, None, {"start": 2, "end": 5})
+    assert list(out["K"]) == [2, 3, 4, 5]
+
+
+def test_run_condition_applies_filters_before_compare():
+    # Only "Active" rows should be compared, so the inactive mismatch is ignored.
+    a = pd.DataFrame({"K": ["1", "2", "3"], "S": ["Active", "Active", "Closed"]})
+    b = pd.DataFrame({"K": ["1", "2", "9"], "S": ["Active", "Active", "Closed"]})
+    cfg = {"col_pairs": [{"axel": "K", "dms": "K"}],
+           "filters": {"axel": [{"col": "S", "op": "eq", "value": "Active"}],
+                       "dms":  [{"col": "S", "op": "eq", "value": "Active"}]}}
+    r = run_condition(a, b, "sheet_diff", cfg)
+    assert r["metrics"]["matched"] == 2
+    assert r["metrics"]["only_in_a"] == 0      # "3"/"9" filtered out
+
+
+# ── Failing-cell highlighting ────────────────────────────────────────────────────
+
+def test_custom_rule_highlights_failing_cells():
+    a = pd.DataFrame({"Deal": ["1", "2"], "G": [100, 200]})
+    b = pd.DataFrame({"Deal": ["1", "2"], "R": [100, 999]})   # deal 2 fails
+    cfg = {"key_axel": "Deal", "checks": [
+        {"axel_col": "G", "dms_col": "R", "mode": "numeric", "op": "eq", "tolerance": 0}]}
+    r = run_custom_rule(a, b, cfg)
+    assert "Failing Columns" in r["preview"]["results"]["columns"]
+    data, _ = get_result(r["result_id"])
+    wb = load_workbook(io.BytesIO(data))
+    ws = wb["Rule_Results"]
+    # The failing row's source cells must be red-filled; the passing row must not.
+    hdr = {c.value: i + 1 for i, c in enumerate(ws[1])}
+    def filled(row, name):
+        return ws.cell(row=row, column=hdr[name]).fill.fgColor.rgb in ("FFFECACA", "00FECACA")
+    assert filled(3, "G [AXEL]") and filled(3, "R [DMS]")     # row 3 = deal 2
+    assert not filled(2, "G [AXEL]")                          # row 2 = deal 1 passed
 
 
 # ── Email helpers ────────────────────────────────────────────────────────────────

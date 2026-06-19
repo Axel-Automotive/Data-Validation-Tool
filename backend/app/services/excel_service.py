@@ -94,6 +94,68 @@ def _norm_series(s: pd.Series, na=""):
     return s.map(lambda v: na if pd.isna(v) else str(v).strip())
 
 
+# ── Row filtering (applied to either file before any comparison) ────────────────
+#
+# config["filters"] = {
+#   "axel": [ { "col", "op", "value" } ],   # combined with AND
+#   "dms":  [ { "col", "op", "value" } ],
+#   "row_range_axel": { "start": 2, "end": 500 },   # 1-based, inclusive, optional
+#   "row_range_dms":  { ... },
+# }
+
+def _apply_one_filter(df: pd.DataFrame, f: dict) -> pd.DataFrame:
+    col = _find_col(df, f["col"])
+    op  = f.get("op", "eq")
+    val = f.get("value", "")
+    s   = df[col]
+
+    if op in ("gt", "lt", "gte", "lte"):
+        num = pd.to_numeric(s, errors="coerce")
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"Filter on '{f['col']}' needs a number for '{op}'.")
+        mask = {"gt": num > v, "lt": num < v, "gte": num >= v, "lte": num <= v}[op]
+        return df[mask.fillna(False)]
+
+    if op in ("eq", "ne"):
+        norm   = _norm_series(s)
+        target = _norm_series(pd.Series([val])).iloc[0]
+        mask   = norm == target
+        return df[mask if op == "eq" else ~mask]
+
+    if op in ("in", "not_in"):
+        vals = val if isinstance(val, list) else [v.strip() for v in str(val).split(",")]
+        targets = set(_norm_series(pd.Series(vals)))
+        mask = _norm_series(s).isin(targets)
+        return df[mask if op == "in" else ~mask]
+
+    if op in ("contains", "not_contains"):
+        mask = s.astype(str).str.contains(str(val), case=False, na=False, regex=False)
+        return df[mask if op == "contains" else ~mask]
+
+    if op in ("is_blank", "not_blank"):
+        blank = s.isna() | (s.astype(str).str.strip() == "")
+        return df[blank if op == "is_blank" else ~blank]
+
+    raise HTTPException(400, f"Unknown filter operator: {op}")
+
+
+def _apply_filters(df: pd.DataFrame, filters: list[dict] | None,
+                   row_range: dict | None) -> pd.DataFrame:
+    out = df
+    for f in filters or []:
+        if f.get("col"):
+            out = _apply_one_filter(out, f)
+    if row_range:
+        start = row_range.get("start")
+        end   = row_range.get("end")
+        lo = (int(start) - 1) if start else 0           # 1-based → 0-based
+        hi = int(end) if end else len(out)              # inclusive end
+        out = out.iloc[max(lo, 0):hi]
+    return out
+
+
 # ── Sheet Difference ───────────────────────────────────────────────────────────
 
 def run_sheet_difference(
@@ -400,6 +462,7 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
 
     merged = left.merge(right, on="__KEY__", how="inner")
     pass_all = pd.Series(True, index=merged.index)
+    check_meta: list[tuple[str, str, pd.Series]] = []   # (col_a, col_b, fail_mask)
 
     for i, chk in enumerate(checks, start=1):
         col_a = f'{chk["axel_col"]} [{name_a}]'
@@ -424,9 +487,22 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
 
         merged[f"Check {i}: {chk['axel_col']} {label} {chk['dms_col']}"] = \
             res.map({True: "Pass", False: "Fail"})
+        check_meta.append((col_a, col_b, ~res))
         pass_all &= res
 
     merged["Result"] = pass_all.map({True: "Pass", False: "Fail"})
+
+    # Readable pointer to the offending columns per failing row — survives into
+    # the combined "run all" report (which can't carry cell colouring).
+    if check_meta:
+        def _fail_cols(pos: int) -> str:
+            names: list[str] = []
+            for col_a, col_b, fail_mask in check_meta:
+                if bool(fail_mask.iloc[pos]):
+                    names += [col_a, col_b]
+            return ", ".join(names)
+        merged["Failing Columns"] = [_fail_cols(p) for p in range(len(merged))]
+
     merged = merged.rename(columns={"__KEY__": key_a})
 
     matched = len(merged)
@@ -441,6 +517,31 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
             failures.to_excel(w, sheet_name="Failures", index=False)
     buf.seek(0)
 
+    # Highlight the exact cells that broke each check, so a reviewer can jump
+    # straight to the offending column+row.
+    wb  = load_workbook(buf)
+    ws  = wb["Rule_Results"]
+    RED = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
+    hdr = {cell.value: i + 1 for i, cell in enumerate(ws[1])}
+    result_idx = hdr.get("Result")
+
+    for r in range(2, ws.max_row + 1):
+        pos   = r - 2                                    # 0-based row in `merged`
+        failed_here = False
+        for col_a, col_b, fail_mask in check_meta:
+            if bool(fail_mask.iloc[pos]):
+                failed_here = True
+                for cname in (col_a, col_b):
+                    ci = hdr.get(cname)
+                    if ci:
+                        ws.cell(row=r, column=ci).fill = RED
+        if failed_here and result_idx:
+            ws.cell(row=r, column=result_idx).fill = RED
+
+    ws.freeze_panes    = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+
     return {
         "type": "custom_rule",
         "metrics": {
@@ -454,7 +555,7 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
             "results": {"data": _to_records(merged), "total": matched,
                         "columns": merged.columns.tolist()},
         },
-        "result_id": _save_result(buf.getvalue(), "CustomRule_Result.xlsx"),
+        "result_id": _save_result(out.getvalue(), "CustomRule_Result.xlsx"),
         "_frames": {"Rule_Results": merged},
     }
 
@@ -462,6 +563,13 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
 # ── Condition dispatcher ───────────────────────────────────────────────────────
 
 def run_condition(df_axel: pd.DataFrame, df_dms: pd.DataFrame, ctype: str, config: dict) -> dict:
+    # Row filtering applies to every comparison type — restrict both files
+    # before the type-specific logic runs.
+    filters = config.get("filters") or {}
+    if filters:
+        df_axel = _apply_filters(df_axel, filters.get("axel"), filters.get("row_range_axel"))
+        df_dms  = _apply_filters(df_dms,  filters.get("dms"),  filters.get("row_range_dms"))
+
     if ctype == "sheet_diff":
         pairs    = config.get("col_pairs", [])
         if not pairs:

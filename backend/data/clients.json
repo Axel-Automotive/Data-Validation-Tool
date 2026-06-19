@@ -25,6 +25,43 @@
           "enabled": true,
           "config": {},
           "id": "a2aa2a60-aa33-4916-9870-40bfac40a8ee"
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "enabled": true,
+          "config": {
+            "key_axel": "Year",
+            "key_dms": "Year",
+            "checks": [
+              {
+                "axel_col": "Year",
+                "dms_col": "Year",
+                "mode": "numeric",
+                "op": "ne",
+                "tolerance": 0
+              }
+            ],
+            "filters": {
+              "axel": [
+                {
+                  "col": "Year",
+                  "op": "eq",
+                  "value": ""
+                }
+              ],
+              "dms": [
+                {
+                  "col": "",
+                  "op": "eq",
+                  "value": ""
+                }
+              ],
+              "row_range_axel": {}
+            }
+          },
+          "id": "30977c85-995b-4ea9-9094-c969ee7228fc"
         }
       ],
       "recipients": [],

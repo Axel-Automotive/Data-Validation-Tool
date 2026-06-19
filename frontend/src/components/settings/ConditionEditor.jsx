@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal, Wand2 } from 'lucide-react'
+import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal, Wand2, Filter, Eye } from 'lucide-react'
 import { autoMapColumns } from '../../lib/columnMatch'
+import ResultPreview from './ResultPreview'
 
 const TYPES = [
   { id: 'sheet_diff',  label: 'Sheet Difference',      Icon: GitCompare,        desc: 'Row comparison — missing records' },
@@ -24,6 +25,16 @@ const TEXT_OPS = [
   { id: 'contains',     label: 'contains' },
   { id: 'not_contains', label: 'does not contain' },
 ]
+
+const FILTER_OPS = [
+  { id: 'eq',  label: 'equals' },        { id: 'ne',  label: 'not equal' },
+  { id: 'gt',  label: 'greater than' },  { id: 'lt',  label: 'less than' },
+  { id: 'gte', label: '≥' },             { id: 'lte', label: '≤' },
+  { id: 'in',  label: 'in list' },       { id: 'not_in', label: 'not in list' },
+  { id: 'contains', label: 'contains' }, { id: 'not_contains', label: 'does not contain' },
+  { id: 'is_blank', label: 'is blank' }, { id: 'not_blank', label: 'is not blank' },
+]
+const NO_VALUE_OPS = new Set(['is_blank', 'not_blank'])
 
 // ── Reusable field components ─────────────────────────────────────────────────
 
@@ -284,6 +295,78 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
   )
 }
 
+// ── Row filters (optional, applies to any comparison type) ─────────────────────
+
+function FilterList({ side, label, filters, columns, onChange }) {
+  const list = filters || []
+  const add    = () => onChange([...list, { col: '', op: 'eq', value: '' }])
+  const remove = i => onChange(list.filter((_, j) => j !== i))
+  const set    = (i, k, v) => onChange(list.map((f, j) => j === i ? { ...f, [k]: v } : f))
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-2xs font-semibold uppercase tracking-wider text-slate-500">{label} filters</p>
+        <button onClick={add} className="inline-flex items-center gap-1 text-2xs font-medium text-brand-600 hover:text-brand-700">
+          <Plus size={11} /> Add
+        </button>
+      </div>
+      {list.length === 0 ? (
+        <p className="text-2xs text-slate-400 italic">No filters — all {label} rows are compared.</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((f, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_24px] items-center gap-1.5">
+              <ColInput value={f.col} onChange={v => set(i, 'col', v)} options={columns} placeholder="Column" />
+              <Select value={f.op} onChange={v => set(i, 'op', v)} options={FILTER_OPS} />
+              {NO_VALUE_OPS.has(f.op)
+                ? <span className="text-2xs text-slate-300 px-2">—</span>
+                : <TextInput value={f.value ?? ''} onChange={v => set(i, 'value', v)} placeholder={f.op === 'in' || f.op === 'not_in' ? 'a, b, c' : 'value'} />}
+              <button onClick={() => remove(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RangeInputs({ label, range, onChange }) {
+  const r = range || {}
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-2xs text-slate-400 w-20">{label} rows</span>
+      <input type="number" min="1" placeholder="from" value={r.start ?? ''}
+        onChange={e => onChange({ ...r, start: e.target.value ? +e.target.value : undefined })}
+        className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      <span className="text-slate-300">–</span>
+      <input type="number" min="1" placeholder="to" value={r.end ?? ''}
+        onChange={e => onChange({ ...r, end: e.target.value ? +e.target.value : undefined })}
+        className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500" />
+    </div>
+  )
+}
+
+function RowFiltersPanel({ config, onChange, columnsAxel, columnsDms }) {
+  const filters = config.filters || {}
+  const set = (k, v) => onChange({ ...config, filters: { ...filters, [k]: v } })
+  return (
+    <div className="space-y-4">
+      <p className="text-2xs text-slate-400">Limit which rows are compared. Filters on a side combine with AND; row ranges are 1-based and inclusive.</p>
+      <div className="grid grid-cols-2 gap-4">
+        <FilterList side="axel" label="AXEL" filters={filters.axel} columns={columnsAxel} onChange={v => set('axel', v)} />
+        <FilterList side="dms"  label="DMS"  filters={filters.dms}  columns={columnsDms}  onChange={v => set('dms', v)} />
+      </div>
+      <div className="border-t border-slate-200 pt-3 space-y-2">
+        <RangeInputs label="AXEL" range={filters.row_range_axel} onChange={v => set('row_range_axel', v)} />
+        <RangeInputs label="DMS"  range={filters.row_range_dms}  onChange={v => set('row_range_dms', v)} />
+      </div>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ConditionEditor({ initial, presetType, lockType, columnsAxel, columnsDms, saving, onSave, onCancel }) {
@@ -293,6 +376,11 @@ export default function ConditionEditor({ initial, presetType, lockType, columns
   const [enabled,    setEnabled]    = useState(initial?.enabled ?? true)
   const [config,     setConfig]     = useState(initial?.config  || {})
   const [nameError,  setNameError]  = useState('')
+  const [showFilters, setShowFilters] = useState(
+    !!(initial?.config?.filters && (
+      initial.config.filters.axel?.length || initial.config.filters.dms?.length ||
+      initial.config.filters.row_range_axel || initial.config.filters.row_range_dms)))
+  const [showPreview, setShowPreview] = useState(false)
 
   const typeLabel = TYPES.find(t => t.id === type)?.label || 'Condition'
 
@@ -361,6 +449,38 @@ export default function ConditionEditor({ initial, presetType, lockType, columns
           {type === 'stacked'     && <StackedForm    config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
           {type === 'calc_diff'   && <CalcDiffForm   config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
           {type === 'custom_rule' && <CustomRuleForm config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
+        </div>
+
+        {/* Row filters — collapsible */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <button onClick={() => setShowFilters(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 transition-colors">
+            <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+              <Filter size={14} className="text-slate-400" /> Row filters (optional)
+            </span>
+            <ChevronDown size={15} className={`text-slate-400 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          </button>
+          {showFilters && (
+            <div className="border-t border-slate-100 bg-slate-50 p-4">
+              <RowFiltersPanel config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />
+            </div>
+          )}
+        </div>
+
+        {/* Result-sheet preview — collapsible */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <button onClick={() => setShowPreview(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-slate-50 transition-colors">
+            <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+              <Eye size={14} className="text-slate-400" /> Preview output layout
+            </span>
+            <ChevronDown size={15} className={`text-slate-400 transition-transform ${showPreview ? 'rotate-180' : ''}`} />
+          </button>
+          {showPreview && (
+            <div className="border-t border-slate-100 bg-slate-50 p-4">
+              <ResultPreview type={type} config={config} />
+            </div>
+          )}
         </div>
 
         {/* Enabled */}
