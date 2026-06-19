@@ -13,6 +13,19 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """A verifying TLS context backed by certifi's CA bundle.
+
+    The python.org macOS build ships an empty system CA store, so the default
+    context raises CERTIFICATE_VERIFY_FAILED against Office 365. certifi's
+    bundle works on macOS and Linux/Azure alike."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
 def _cfg() -> dict:
     user = os.getenv("SMTP_USER", "").strip()
     return {
@@ -125,7 +138,7 @@ def send_report(
     try:
         with smtplib.SMTP(c["host"], c["port"], timeout=30) as server:
             server.ehlo()
-            server.starttls(context=ssl.create_default_context())
+            server.starttls(context=_ssl_context())
             server.login(c["user"], c["password"])
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError:
