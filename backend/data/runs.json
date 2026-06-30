@@ -1,3 +1,39 @@
 {
-  "runs": []
+  "runs": [
+    {
+      "id": "f2b45d30-76c8-41e9-93c8-1103babc671f",
+      "ts": "2026-06-30 16:49:24",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "manual",
+      "total": 3,
+      "errors": 3,
+      "combined_result_id": "866eea31-e84b-4b45-b7e8-8e18d177c18f",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": "400: Column 'Stock\nNo.' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": "400: Column 'Year' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        }
+      ]
+    }
+  ]
 }

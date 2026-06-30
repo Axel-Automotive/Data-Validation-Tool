@@ -3,6 +3,7 @@ import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, L
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
 import { listFiles } from '../api/schedules'
 import { getShared } from '../api/shared'
+import { getAxelQueries } from '../api/axelSources'
 import useFileSelection from '../hooks/useFileSelection'
 import FileSelectionBar from '../components/common/FileSelectionBar'
 import MetricCard from '../components/common/MetricCard'
@@ -18,8 +19,14 @@ const TYPE_META = {
 }
 
 export default function Dashboard({ selectedClient, onNavigate }) {
-  const fs = useFileSelection()
-  const { fileAxel, fileDms, sheetAxel, sheetDms, filesReady } = fs
+  const fs = useFileSelection(selectedClient?.id)
+  const { fileAxel, fileDms, sheetAxel, sheetDms, filesReady, axelSourceRef } = fs
+  const [axelQueries, setAxelQueries] = useState([])
+
+  // The AXEL side of each run request: a saved query, or the uploaded file.
+  const axelPayload = () => axelSourceRef
+    ? { axel_source: axelSourceRef }
+    : { file_axel_id: fileAxel.id, sheet_axel: sheetAxel }
   const [running,       setRunning]       = useState(false)
   const [emailing,      setEmailing]      = useState(false)
   const [runResults,    setRunResults]    = useState(null)
@@ -64,6 +71,12 @@ export default function Dashboard({ selectedClient, onNavigate }) {
     getShared().then(s => setSharedConds(Array.isArray(s) ? s : [])).catch(() => {})
   }, [])
 
+  // Load this client's saved AXEL data-source queries (for the source picker).
+  useEffect(() => {
+    if (!selectedClient) { setAxelQueries([]); return }
+    getAxelQueries(selectedClient.id).then(q => setAxelQueries(Array.isArray(q) ? q : [])).catch(() => setAxelQueries([]))
+  }, [selectedClient?.id])
+
   // Shared conditions apply to every client and run first.
   const conditions = [
     ...sharedConds.map(c => ({ ...c, _shared: true })),
@@ -77,7 +90,7 @@ export default function Dashboard({ selectedClient, onNavigate }) {
     setError(null); setRunResults(null); setCombinedId(null)
     try {
       const call = email ? runAllAndEmail : runAll
-      const res = await call({ client_id: selectedClient.id, file_axel_id: fileAxel.id, file_dms_id: fileDms.id, sheet_axel: sheetAxel, sheet_dms: sheetDms })
+      const res = await call({ client_id: selectedClient.id, file_dms_id: fileDms.id, sheet_dms: sheetDms, ...axelPayload() })
       setRunResults(res.conditions)
       setCombinedId(res.combined_result_id)
       const failed = res.conditions.filter(r => r.error).length
@@ -93,7 +106,7 @@ export default function Dashboard({ selectedClient, onNavigate }) {
   const handleRunOne = async (cond) => {
     setSingleRunning(p => ({ ...p, [cond.id]: true }))
     try {
-      const res = await runCondition({ client_id: selectedClient.id, condition_id: cond.id, file_axel_id: fileAxel.id, file_dms_id: fileDms.id, sheet_axel: sheetAxel, sheet_dms: sheetDms })
+      const res = await runCondition({ client_id: selectedClient.id, condition_id: cond.id, file_dms_id: fileDms.id, sheet_dms: sheetDms, ...axelPayload() })
       setRunResults(prev => {
         const arr = prev ? [...prev] : []
         const i = arr.findIndex(r => r.condition_id === cond.id)
@@ -163,14 +176,14 @@ export default function Dashboard({ selectedClient, onNavigate }) {
         </div>
       </div>
 
-      {/* Source files for this run */}
-      <FileSelectionBar fs={fs} />
+      {/* Source for this run — AXEL file/.xlsx or a saved DB query, plus DMS file */}
+      <FileSelectionBar fs={fs} axelQueries={axelQueries} />
 
       {/* Banners */}
       {!filesReady && (
         <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
-          <p className="text-sm text-amber-800">Upload AXEL and DMS files above, then pick a sheet for each, to run validations.</p>
+          <p className="text-sm text-amber-800">Provide both sources above — AXEL (upload a sheet or load a data-source query) and the DMS file — to run validations.</p>
         </div>
       )}
       {error && (

@@ -48,20 +48,60 @@ class ConditionUpsertRequest(BaseModel):
 class RunConditionRequest(BaseModel):
     client_id: str
     condition_id: str
-    file_axel_id: str
+    file_axel_id: str = ""
     file_dms_id: str
-    sheet_axel: str
+    sheet_axel: str = ""
     sheet_dms: str
+    # When set, the AXEL side comes from a saved query instead of an .xlsx file:
+    #   { "kind": "query", "query_id": "...", "params": { ... } }
+    axel_source: dict | None = None
 
 
 class RunAllRequest(BaseModel):
     client_id: str
-    file_axel_id: str
+    file_axel_id: str = ""
     file_dms_id: str
-    sheet_axel: str
+    sheet_axel: str = ""
     sheet_dms: str
+    axel_source: dict | None = None           # see RunConditionRequest
     email: bool = False                       # also email the report when done
     email_to: list[str] | None = None         # override saved recipients (optional)
+
+
+# ── AXEL data source (per-client DB query) ────────────────────────────────────
+
+class AxelConnectionRequest(BaseModel):
+    kind: str = "db"                          # "db" | "api"
+    host: str = ""
+    port: int = 1433
+    database: str = ""
+    username: str = ""
+    password: str = ""                        # blank on update → keep stored secret
+    api_base: str = ""
+    api_token: str = ""                       # blank on update → keep stored secret
+
+
+class AxelQueryParam(BaseModel):
+    name: str
+    type: str = "text"                        # text | int | float | date
+    required: bool = False
+    default: str | None = None
+    label: str = ""
+
+
+class AxelQueryUpsertRequest(BaseModel):
+    name: str
+    description: str = ""
+    source_kind: str = "db"                   # "db" | "api"
+    db_mode: str = "sql"                       # "sql" | "procedure"
+    sql: str = ""
+    procedure: str = ""
+    api_method: str = "GET"
+    api_path: str = ""
+    api_body: dict = Field(default_factory=dict)
+    api_json_path: str = ""
+    params: list[AxelQueryParam] = Field(default_factory=list)
+    row_limit: int = 50000
 
 
 # ── Schedules (automated recurring runs) ──────────────────────────────────────

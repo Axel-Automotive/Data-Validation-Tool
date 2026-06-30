@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Edit2, Check, X, ToggleLeft, ToggleRight, Users, GitCompare, Layers, TrendingUp, SlidersHorizontal, Mail } from 'lucide-react'
 import { createClient, updateClient, deleteClient, createCondition, updateCondition, deleteCondition, updateEmailSettings } from '../api/clients'
+import { getAxelQueries } from '../api/axelSources'
 import useFileSelection from '../hooks/useFileSelection'
 import FileSelectionBar from '../components/common/FileSelectionBar'
 import ConditionEditor from '../components/settings/ConditionEditor'
 import RecipientsEditor from '../components/settings/RecipientsEditor'
+import AxelSourceManager from '../components/settings/AxelSourceManager'
 import { toast } from '../lib/toast'
 
 const TYPE_META = {
@@ -30,8 +32,18 @@ function ConditionSummary({ cond }) {
 }
 
 export default function Settings({ clients, selectedClient, onSelectClient, onClientsChange }) {
-  const fs = useFileSelection()
+  const fs = useFileSelection(selectedClient?.id)
   const { columnsAxel, columnsDms } = fs
+  const [axelQueries, setAxelQueries] = useState([])
+
+  // Load this client's saved AXEL queries so the column-source bar can offer
+  // them, and reset the column selection when switching clients.
+  useEffect(() => {
+    fs.clear()
+    if (!selectedClient) { setAxelQueries([]); return }
+    getAxelQueries(selectedClient.id).then(q => setAxelQueries(Array.isArray(q) ? q : [])).catch(() => setAxelQueries([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClient?.id])
   const [editingClient,    setEditingClient]    = useState(null)
   const [editClientName,   setEditClientName]   = useState('')
   const [newClientName,    setNewClientName]    = useState('')
@@ -207,7 +219,7 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
               <h3 className="text-base font-bold text-slate-900">{selectedClient.name}</h3>
               <p className="text-sm text-slate-500 mt-0.5">
                 {conditions.length} condition{conditions.length !== 1 ? 's' : ''}
-                {columnsAxel.length > 0 ? ` · ${columnsAxel.length} AXEL / ${columnsDms.length} DMS columns loaded` : ' · upload files for column suggestions'}
+                {columnsAxel.length > 0 ? ` · ${columnsAxel.length} AXEL / ${columnsDms.length} DMS columns loaded` : ' · load a data source or upload files for column suggestions'}
               </p>
             </div>
 
@@ -219,8 +231,17 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
               clientName={selectedClient.name}
               onSave={handleSaveEmail} />
 
-            {/* Source files — upload to get column suggestions for conditions */}
-            <FileSelectionBar fs={fs} />
+            {/* Per-client AXEL data source — DB connection + saved report queries */}
+            <AxelSourceManager clientId={selectedClient.id} />
+
+            {/* Load columns the conditions below will pick from — choose the AXEL
+                side (a saved query OR an uploaded sheet) and a DMS file. */}
+            <div>
+              <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                Load columns to build conditions
+              </p>
+              <FileSelectionBar fs={fs} axelQueries={axelQueries} />
+            </div>
 
             {/* Add a validation condition — one button per type */}
             {!editingCondition && (

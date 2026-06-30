@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Upload, FileSpreadsheet, ChevronDown, Check } from 'lucide-react'
+import { Upload, FileSpreadsheet, ChevronDown, Check, Database, Play } from 'lucide-react'
 import { uploadFile } from '../../api/client'
 
 function FileSlot({ label, fileInfo, onUploaded }) {
@@ -17,11 +17,7 @@ function FileSlot({ label, fileInfo, onUploaded }) {
   }
 
   return (
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
-        {fileInfo && <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 font-medium"><Check size={11} /> Loaded</span>}
-      </div>
+    <div className="min-w-0">
       <div
         onDrop={e => { e.preventDefault(); setDragging(false); handle(e.dataTransfer.files[0]) }}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -80,23 +76,128 @@ function SheetSelect({ value, onChange, sheets }) {
   )
 }
 
+const PARAM_INPUT_TYPE = { int: 'number', float: 'number', date: 'date', text: 'text' }
+
+/** AXEL data-source picker: choose a saved query, fill params, load its columns. */
+function QueryPicker({ fs, queries }) {
+  const { axelQuery, axelParams, queryLoading, datasetInfo,
+          selectAxelQuery, setAxelParam, loadQueryColumns } = fs
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+      {queries.length === 0 ? (
+        <p className="text-xs text-slate-400 py-1">
+          No saved queries for this client yet. Add one in <span className="font-medium text-slate-500">Settings → AXEL Data Source</span>.
+        </p>
+      ) : (
+        <>
+          <div className="relative">
+            <select
+              value={axelQuery?.id || ''}
+              onChange={e => selectAxelQuery(queries.find(q => q.id === e.target.value) || null)}
+              className="w-full appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 cursor-pointer">
+              <option value="">Select a report query…</option>
+              {queries.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
+            </select>
+            <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+
+          {(axelQuery?.params || []).length > 0 && (
+            <div className="flex flex-wrap gap-2.5">
+              {axelQuery.params.map(p => (
+                <div key={p.name}>
+                  <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    {p.label || p.name}{p.required ? ' *' : ''}
+                  </label>
+                  <input
+                    type={PARAM_INPUT_TYPE[p.type] || 'text'}
+                    value={axelParams[p.name] ?? ''}
+                    onChange={e => setAxelParam(p.name, e.target.value)}
+                    className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {axelQuery && (
+            <div className="flex items-center gap-2">
+              <button onClick={loadQueryColumns} disabled={queryLoading}
+                className="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50">
+                {queryLoading
+                  ? <><span className="w-3.5 h-3.5 border-[1.5px] border-white border-t-transparent rounded-full animate-spin" /> Running…</>
+                  : <><Play size={12} /> Load columns</>}
+              </button>
+              {datasetInfo.axel && (
+                <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 font-medium">
+                  <Check size={11} /> {datasetInfo.axel.rows.toLocaleString()} × {datasetInfo.axel.cols} (sample)
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function ModeToggle({ mode, onChange }) {
+  const opt = (val, label, Icon) => (
+    <button onClick={() => onChange(val)}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${
+        mode === val ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>
+      <Icon size={11} /> {label}
+    </button>
+  )
+  return (
+    <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+      {opt('file', 'Upload file', FileSpreadsheet)}
+      {opt('query', 'Data source', Database)}
+    </div>
+  )
+}
+
 /**
- * Compact AXEL/DMS upload + sheet selection bar, driven by a useFileSelection() instance.
+ * AXEL/DMS source bar, driven by a useFileSelection() instance.
+ *
+ * When `axelQueries` is provided (a client context with saved queries), the AXEL
+ * side gains a file ↔ data-source toggle. Without it, the bar is file-only.
  */
-export default function FileSelectionBar({ fs, axelLabel = 'AXEL', dmsLabel = 'DMS' }) {
+export default function FileSelectionBar({ fs, axelLabel = 'AXEL', dmsLabel = 'DMS', axelQueries = null }) {
   const { fileAxel, fileDms, sheetAxel, sheetDms, setSheetAxel, setSheetDms,
-          onAxelUploaded, onDmsUploaded, datasetInfo } = fs
+          onAxelUploaded, onDmsUploaded, datasetInfo, axelMode, switchAxelMode } = fs
+
+  const queryEnabled = Array.isArray(axelQueries)
 
   return (
     <div className="border border-slate-200 rounded-xl bg-white p-4">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <FileSlot label={axelLabel} fileInfo={fileAxel} onUploaded={onAxelUploaded} />
-        <FileSlot label={dmsLabel}  fileInfo={fileDms}  onUploaded={onDmsUploaded} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* AXEL side */}
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-1.5 gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{axelLabel}</span>
+            {queryEnabled
+              ? <ModeToggle mode={axelMode} onChange={switchAxelMode} />
+              : (fileAxel && <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 font-medium"><Check size={11} /> Loaded</span>)}
+          </div>
+          {queryEnabled && axelMode === 'query'
+            ? <QueryPicker fs={fs} queries={axelQueries} />
+            : <FileSlot label={axelLabel} fileInfo={fileAxel} onUploaded={onAxelUploaded} />}
+        </div>
+
+        {/* DMS side (always a file) */}
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{dmsLabel}</span>
+            {fileDms && <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 font-medium"><Check size={11} /> Loaded</span>}
+          </div>
+          <FileSlot label={dmsLabel} fileInfo={fileDms} onUploaded={onDmsUploaded} />
+        </div>
       </div>
 
-      {(fileAxel || fileDms) && (
+      {/* Sheet pickers (file mode only) */}
+      {((axelMode === 'file' && fileAxel) || fileDms) && (
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3 mt-4 pt-4 border-t border-slate-100">
-          {fileAxel && (
+          {axelMode === 'file' && fileAxel && (
             <div>
               <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{axelLabel} sheet</label>
               <div className="flex items-center gap-2">

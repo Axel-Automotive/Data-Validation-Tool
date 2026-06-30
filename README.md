@@ -16,6 +16,18 @@ automatically, and email the resulting report.
   - **Custom Rule** — a no‑code rule builder (join key + column checks with
     numeric/text operators and tolerances)
 - **Clients & conditions** — save validation rules per client and run them all at once
+- **Shared conditions** — rules that apply to every client, run before each client's
+  own conditions (managed via `/api/shared-conditions`)
+- **AXEL data sources (per-client SQL)** — instead of uploading an AXEL `.xlsx`, a
+  client can pull its AXEL side live from its **own** SQL Server / Azure SQL database
+  via a saved SELECT query ("one query = one report"). The `.xlsx` upload remains a
+  fully supported option, chosen per run via a toggle on the AXEL side.
+  - Manage a client's DB connection and report queries under **Settings → AXEL Data
+    Source** (with a live **Preview** that loads columns + a sample). On the
+    **Dashboard**, switch the AXEL side to **Data source** and pick a query to run.
+  - Per-client DB credentials are entered in the app and stored **encrypted at rest**
+    (never in git-tracked `clients.json`); only read-only SELECT queries are allowed.
+  - _Not yet wired: scheduled runs from a query, and API (non-DB) sources._
 - **Email reports** — send the combined Excel report to a saved recipient list,
   with an editable subject (Microsoft 365 / SMTP)
 - **Schedules** — run a client's validations automatically (e.g. weekdays at 8am)
@@ -160,6 +172,11 @@ files and generated reports under `backend/data`.
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET/POST | `/api/clients/` | list / create clients |
+| GET/POST | `/api/shared-conditions/` | list / create conditions shared by all clients |
+| GET/PUT/DELETE | `/api/clients/{id}/axel-connection` | per-client AXEL DB connection (secrets masked) |
+| POST | `/api/clients/{id}/axel-connection/test` | test a client's AXEL DB connection |
+| GET/POST | `/api/clients/{id}/axel-queries` | list / create a client's report queries |
+| POST | `/api/clients/{id}/axel-queries/{qid}/preview` | run a query (limited) → columns + sample |
 | PUT | `/api/clients/{id}/email` | set recipients + subject |
 | POST | `/api/compare/run-all` | run all conditions (optional `email: true`) |
 | POST | `/api/compare/email/test` | send a test email |

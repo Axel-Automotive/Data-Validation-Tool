@@ -8,7 +8,15 @@ from pydantic import BaseModel as _BaseModel
 
 from app.models import RunConditionRequest, RunAllRequest
 from app.routers.files import load_df
-from app.services import client_store, email_service, runs_store, shared_store
+from app.services import (
+    axel_connection_store,
+    axel_query_store,
+    axel_source,
+    client_store,
+    email_service,
+    runs_store,
+    shared_store,
+)
 from app.services.excel_service import (
     get_result,
     run_calc_difference,
@@ -24,6 +32,24 @@ router = APIRouter()
 def _public(result: dict) -> dict:
     """Drop internal-only keys (full DataFrames) that aren't JSON-serializable."""
     return {k: v for k, v in result.items() if not k.startswith("_")}
+
+
+def resolve_axel_df(client_id: str, file_axel_id: str, sheet_axel: str,
+                    axel_source_ref: dict | None):
+    """Produce the AXEL-side DataFrame from either a saved query or an .xlsx file.
+
+    `axel_source_ref` of {"kind": "query", "query_id", "params"} runs the client's
+    saved query; otherwise we fall back to the uploaded file (existing behaviour).
+    """
+    if axel_source_ref and axel_source_ref.get("kind") == "query":
+        query = axel_query_store.get(client_id, axel_source_ref.get("query_id"))
+        if not query:
+            raise HTTPException(404, "AXEL query not found for this client.")
+        conn = axel_connection_store.get(client_id)
+        return axel_source.run_query(client_id, conn, query, axel_source_ref.get("params"))
+    if not file_axel_id or not sheet_axel:
+        raise HTTPException(400, "No AXEL source provided — choose a file/sheet or a query.")
+    return load_df(file_axel_id, sheet_axel)
 
 
 # ── Ad-hoc request models ─────────────────────────────────────────────────────
@@ -94,7 +120,7 @@ def run_one_condition(req: RunConditionRequest):
     if not cond:
         raise HTTPException(404, "Condition not found")
 
-    df_axel = load_df(req.file_axel_id, req.sheet_axel)
+    df_axel = resolve_axel_df(req.client_id, req.file_axel_id, req.sheet_axel, req.axel_source)
     df_dms  = load_df(req.file_dms_id,  req.sheet_dms)
     return _public(run_condition(df_axel, df_dms, cond["type"], cond.get("config", {})))
 
@@ -105,7 +131,7 @@ def run_all(req: RunAllRequest):
     if not client:
         raise HTTPException(404, "Client not found")
 
-    df_axel = load_df(req.file_axel_id, req.sheet_axel)
+    df_axel = resolve_axel_df(req.client_id, req.file_axel_id, req.sheet_axel, req.axel_source)
     df_dms  = load_df(req.file_dms_id,  req.sheet_dms)
 
     # Shared conditions apply to every client, run before the client's own.

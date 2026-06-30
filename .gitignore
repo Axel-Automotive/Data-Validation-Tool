@@ -1,6 +1,9 @@
 # Secrets — never commit
 backend/.env
 .env
+# AXEL data-source secrets — per-client DB credentials (encrypted) + encryption key
+backend/data/axel_connections.json
+backend/data/.secret_key
 
 # Python
 __pycache__/

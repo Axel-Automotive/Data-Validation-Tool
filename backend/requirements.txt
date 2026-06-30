@@ -7,5 +7,12 @@ python-dotenv>=1.0.0
 APScheduler>=3.10.0
 certifi>=2024.2.2
 
+# AXEL data source (per-client SQL queries) — lazily imported, only needed when
+# a client uses a DB-backed AXEL source instead of an uploaded .xlsx.
+SQLAlchemy>=2.0.0
+pymssql>=2.2.0          # SQL Server / Azure SQL driver (no system ODBC deps)
+sqlparse>=0.5.0         # SELECT-only validation of user-authored SQL
+cryptography>=42.0.0    # encrypts per-client DB credentials at rest
+
 # dev / test
 pytest>=8.0.0
