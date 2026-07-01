@@ -11,12 +11,15 @@ const PARAM_TYPES = ['text', 'int', 'float', 'date']
 const blankQuery = () => ({
   name: '', description: '', source_kind: 'db', db_mode: 'sql',
   sql: '', params: [], row_limit: 50000,
+  api_method: 'GET', api_path: '', api_body: {}, api_json_path: '',
 })
 
 // ── Connection editor ─────────────────────────────────────────────────────────
 function ConnectionEditor({ clientId }) {
-  const [form, setForm] = useState({ kind: 'db', host: '', port: 1433, database: '', username: '', password: '' })
+  const [form, setForm] = useState({ kind: 'db', host: '', port: 1433, database: '', username: '', password: '',
+                                     api_base: '', api_token: '', api_auth: 'bearer', api_auth_name: '' })
   const [hasPassword, setHasPassword] = useState(false)
+  const [hasApiToken, setHasApiToken] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
@@ -24,19 +27,24 @@ function ConnectionEditor({ clientId }) {
   useEffect(() => {
     getAxelConnection(clientId).then(c => {
       if (!c || !Object.keys(c).length) return
-      setForm(f => ({ ...f, kind: c.kind || 'db', host: c.host || '', port: c.port || 1433, database: c.database || '', username: c.username || '', password: '' }))
+      setForm(f => ({ ...f, kind: c.kind || 'db', host: c.host || '', port: c.port || 1433,
+        database: c.database || '', username: c.username || '', password: '',
+        api_base: c.api_base || '', api_token: '', api_auth: c.api_auth || 'bearer', api_auth_name: c.api_auth_name || '' }))
       setHasPassword(!!c.has_password)
+      setHasApiToken(!!c.has_api_token)
     }).catch(() => {})
   }, [clientId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const isApi = form.kind === 'api'
 
   const handleSave = async () => {
     setSaving(true); setTestResult(null)
     try {
       await saveAxelConnection(clientId, form)
       setHasPassword(hasPassword || !!form.password)
-      set('password', '')
+      setHasApiToken(hasApiToken || !!form.api_token)
+      setForm(f => ({ ...f, password: '', api_token: '' }))
       toast('Connection saved', 'success')
     } catch (e) { toast(e.response?.data?.detail || 'Failed to save connection', 'error') }
     finally { setSaving(false) }
@@ -58,20 +66,56 @@ function ConnectionEditor({ clientId }) {
     </div>
   )
 
+  const selectCls = "w-full appearance-none border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400"
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Plug size={14} className="text-slate-500" />
-        <h4 className="text-sm font-bold text-slate-900">SQL Server connection</h4>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Plug size={14} className="text-slate-500" />
+          <h4 className="text-sm font-bold text-slate-900">{isApi ? 'API connection' : 'SQL Server connection'}</h4>
+        </div>
+        <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+          <button type="button" onClick={() => set('kind', 'db')}
+            className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${!isApi ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>Database</button>
+          <button type="button" onClick={() => set('kind', 'api')}
+            className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${isApi ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>API</button>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {field('Host', 'host', 'text', 'sql.example.com')}
-        {field('Port', 'port', 'number')}
-        {field('Database', 'database')}
-        {field('Username', 'username', 'text', 'read-only login')}
-      </div>
-      {field(hasPassword ? 'Password (leave blank to keep current)' : 'Password', 'password', 'password', hasPassword ? '••••••••' : '')}
-      <p className="text-2xs text-slate-400">Use a <span className="font-medium">read-only</span> SQL login. Credentials are encrypted at rest and never leave the server.</p>
+
+      {isApi ? (
+        <>
+          {field('Base URL', 'api_base', 'text', 'https://api.example.com')}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Auth type</label>
+              <select value={form.api_auth} onChange={e => set('api_auth', e.target.value)} className={selectCls}>
+                <option value="bearer">Bearer token</option>
+                <option value="header">API key header</option>
+                <option value="query">Query-param key</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            {(form.api_auth === 'header' || form.api_auth === 'query') &&
+              field(form.api_auth === 'header' ? 'Header name' : 'Param name', 'api_auth_name', 'text',
+                    form.api_auth === 'header' ? 'X-API-Key' : 'api_key')}
+          </div>
+          {form.api_auth !== 'none' &&
+            field(hasApiToken ? 'Token / key (leave blank to keep current)' : 'Token / key', 'api_token', 'password', hasApiToken ? '••••••••' : '')}
+          <p className="text-2xs text-slate-400">The token is encrypted at rest and never leaves the server.</p>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {field('Host', 'host', 'text', 'sql.example.com')}
+            {field('Port', 'port', 'number')}
+            {field('Database', 'database')}
+            {field('Username', 'username', 'text', 'read-only login')}
+          </div>
+          {field(hasPassword ? 'Password (leave blank to keep current)' : 'Password', 'password', 'password', hasPassword ? '••••••••' : '')}
+          <p className="text-2xs text-slate-400">Use a <span className="font-medium">read-only</span> SQL login. Credentials are encrypted at rest and never leave the server.</p>
+        </>
+      )}
       <div className="flex items-center gap-2">
         <button onClick={handleSave} disabled={saving}
           className="inline-flex items-center gap-1.5 bg-brand-600 text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50">
@@ -93,11 +137,14 @@ function ConnectionEditor({ clientId }) {
 
 // ── Query editor ────────────────────────────────────────────────────────────
 function QueryEditor({ clientId, initial, onSaved, onCancel }) {
-  const [q, setQ] = useState(initial || blankQuery())
+  const [q, setQ] = useState(initial ? { ...blankQuery(), ...initial } : blankQuery())
+  const [bodyText, setBodyText] = useState(JSON.stringify(initial?.api_body || {}, null, 2))
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState(null)
 
+  const isApi = q.source_kind === 'api'
+  const isPost = (q.api_method || 'GET').toUpperCase() === 'POST'
   const set = (k, v) => setQ(p => ({ ...p, [k]: v }))
   const setParam = (i, k, v) => setQ(p => ({ ...p, params: p.params.map((pr, j) => j === i ? { ...pr, [k]: v } : pr) }))
   const addParam = () => setQ(p => ({ ...p, params: [...p.params, { name: '', type: 'text', required: false, default: '', label: '' }] }))
@@ -105,14 +152,19 @@ function QueryEditor({ clientId, initial, onSaved, onCancel }) {
 
   const handleSave = async () => {
     if (!q.name.trim()) { toast('Give the query a name', 'error'); return }
+    let payload = q
+    if (isApi && isPost) {
+      try { payload = { ...q, api_body: bodyText.trim() ? JSON.parse(bodyText) : {} } }
+      catch { toast('Request body is not valid JSON', 'error'); return }
+    }
     setSaving(true)
     try {
       const saved = initial?.id
-        ? await updateAxelQuery(clientId, initial.id, q)
-        : await createAxelQuery(clientId, q)
+        ? await updateAxelQuery(clientId, initial.id, payload)
+        : await createAxelQuery(clientId, payload)
       toast(initial?.id ? 'Query updated' : 'Query created', 'success')
       onSaved(saved)
-    } catch (e) { toast(e.response?.data?.detail || 'Failed to save query (check the SQL is a single SELECT)', 'error') }
+    } catch (e) { toast(e.response?.data?.detail || 'Failed to save query (for DB, the SQL must be a single SELECT)', 'error') }
     finally { setSaving(false) }
   }
 
@@ -129,6 +181,16 @@ function QueryEditor({ clientId, initial, onSaved, onCancel }) {
 
   return (
     <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400">Source kind</label>
+        <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+          <button type="button" onClick={() => set('source_kind', 'db')}
+            className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${!isApi ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>Database (SQL)</button>
+          <button type="button" onClick={() => set('source_kind', 'api')}
+            className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${isApi ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>API</button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Query / report name</label>
@@ -142,12 +204,46 @@ function QueryEditor({ clientId, initial, onSaved, onCancel }) {
         </div>
       </div>
 
-      <div>
-        <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">SQL (read-only SELECT — use :name for parameters)</label>
-        <textarea value={q.sql} onChange={e => set('sql', e.target.value)} rows={5} spellCheck={false}
-          placeholder={'SELECT id, total\nFROM dbo.Orders\nWHERE sale_date >= :from_date'}
-          className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
-      </div>
+      {isApi ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-[110px_1fr] gap-3">
+            <div>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Method</label>
+              <select value={q.api_method} onChange={e => set('api_method', e.target.value)}
+                className="w-full appearance-none border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Path (relative to base URL — use :name for params)</label>
+              <input value={q.api_path} onChange={e => set('api_path', e.target.value)} spellCheck={false}
+                placeholder="/reports/daily-sales?from=:from_date"
+                className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">JSON path to rows (e.g. data.rows — blank if the response is already an array)</label>
+            <input value={q.api_json_path} onChange={e => set('api_json_path', e.target.value)} spellCheck={false} placeholder="data.rows"
+              className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
+          </div>
+          {isPost && (
+            <div>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Request body (JSON — use ":name" for params)</label>
+              <textarea value={bodyText} onChange={e => setBodyText(e.target.value)} rows={4} spellCheck={false}
+                placeholder={'{\n  "store": ":store_id"\n}'}
+                className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">SQL (read-only SELECT — use :name for parameters)</label>
+          <textarea value={q.sql} onChange={e => set('sql', e.target.value)} rows={5} spellCheck={false}
+            placeholder={'SELECT id, total\nFROM dbo.Orders\nWHERE sale_date >= :from_date'}
+            className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
+        </div>
+      )}
 
       {/* Params */}
       <div>

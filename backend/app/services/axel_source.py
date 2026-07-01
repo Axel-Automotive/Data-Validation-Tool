@@ -134,14 +134,21 @@ def _bind_params(query: dict, params: dict | None) -> dict:
 
 def run_query(client_id: str, conn: dict, query: dict, params: dict | None = None,
               limit: int | None = None) -> pd.DataFrame:
-    """Run a client's query against its DB and return up to `limit` rows."""
+    """Run a client's query (DB or API) and return up to `limit` rows."""
     if conn is None:
         raise HTTPException(400, "No AXEL connection configured for this client.")
-    if (query.get("source_kind") or "db") != "db":
-        raise HTTPException(400, "Only DB sources are supported in this version.")
+    kind = query.get("source_kind") or "db"
+    if kind == "api":
+        return _run_api(conn, query, params, limit)
+    if kind != "db":
+        raise HTTPException(400, f"Unknown AXEL source kind: {kind}")
     if (query.get("db_mode") or "sql") != "sql":
-        raise HTTPException(400, "Only SQL (SELECT) queries are supported in this version.")
+        raise HTTPException(400, "Only SQL (SELECT) queries are supported for DB sources.")
+    return _run_db(client_id, conn, query, params, limit)
 
+
+def _run_db(client_id: str, conn: dict, query: dict, params: dict | None,
+            limit: int | None) -> pd.DataFrame:
     from sqlalchemy import text
 
     sql = validate_sql(query.get("sql", ""))
@@ -164,6 +171,95 @@ def run_query(client_id: str, conn: dict, query: dict, params: dict | None = Non
     return pd.DataFrame(rows, columns=cols)
 
 
+# ── API sources ────────────────────────────────────────────────────────────
+
+def _subst(obj, bound: dict):
+    """Replace :name placeholders in strings (recursing into dicts/lists)."""
+    if isinstance(obj, str):
+        for k, v in bound.items():
+            obj = obj.replace(f":{k}", "" if v is None else str(v))
+        return obj
+    if isinstance(obj, dict):
+        return {k: _subst(v, bound) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_subst(x, bound) for x in obj]
+    return obj
+
+
+def _subst_url(url: str, bound: dict) -> str:
+    from urllib.parse import quote
+    for k, v in bound.items():
+        url = url.replace(f":{k}", quote("" if v is None else str(v), safe=""))
+    return url
+
+
+def _auth(conn: dict) -> tuple[dict, dict]:
+    """Build (headers, query_params) for the configured auth mode."""
+    headers, qp = {}, {}
+    token = conn.get("api_token") or ""
+    mode = (conn.get("api_auth") or "bearer").lower()
+    name = conn.get("api_auth_name") or ""
+    if token and mode == "bearer":
+        headers["Authorization"] = f"Bearer {token}"
+    elif token and mode == "header":
+        headers[name or "X-API-Key"] = token
+    elif token and mode == "query":
+        qp[name or "api_key"] = token
+    return headers, qp
+
+
+def _dig(data, path: str):
+    """Navigate a dotted JSON path to the row array; '' → whole payload."""
+    node = data
+    for part in (p for p in path.split(".") if p):
+        node = node.get(part) if isinstance(node, dict) else None
+        if node is None:
+            break
+    return node
+
+
+def _run_api(conn: dict, query: dict, params: dict | None, limit: int | None) -> pd.DataFrame:
+    import httpx
+
+    base = (conn.get("api_base") or "").rstrip("/")
+    if not base:
+        raise HTTPException(400, "No API base URL configured for this client.")
+
+    bound = _bind_params(query, params)
+    path = query.get("api_path") or ""
+    url = _subst_url(base + ("/" + path.lstrip("/") if path else ""), bound)
+    method = (query.get("api_method") or "GET").upper()
+    headers, qp = _auth(conn)
+    cap = limit or query.get("row_limit") or DEFAULT_ROW_LIMIT
+
+    # Merge auth query params into the URL ourselves — httpx's params= arg
+    # replaces (not merges) any query string already baked into the URL.
+    if qp:
+        from urllib.parse import urlencode
+        url += ("&" if "?" in url else "?") + urlencode(qp)
+
+    try:
+        with httpx.Client(timeout=QUERY_TIMEOUT_S, follow_redirects=True) as client:
+            if method == "POST":
+                resp = client.post(url, headers=headers, json=_subst(query.get("api_body") or {}, bound))
+            else:
+                resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+        payload = resp.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"AXEL API request failed: {e}")
+
+    records = _dig(payload, query.get("api_json_path") or "")
+    if isinstance(records, dict):
+        records = [records]
+    if not isinstance(records, list):
+        raise HTTPException(502, "Could not find a row array in the API response — check the JSON path.")
+
+    return pd.json_normalize(records).head(int(cap))
+
+
 def preview(client_id: str, conn: dict, query: dict, params: dict | None = None) -> dict:
     """Small run used by the UI to fetch columns + a sample for building rules."""
     df = run_query(client_id, conn, query, params, limit=PREVIEW_ROW_LIMIT)
@@ -176,7 +272,21 @@ def preview(client_id: str, conn: dict, query: dict, params: dict | None = None)
 
 
 def test_connection(client_id: str, conn: dict) -> dict:
-    """Attempt a trivial query to verify a client's connection works."""
+    """Verify a client's connection works (a trivial DB query, or an API reachability check)."""
+    if (conn.get("kind") or "db") == "api":
+        import httpx
+        base = (conn.get("api_base") or "").strip()
+        if not base:
+            return {"ok": False, "message": "No API base URL configured."}
+        headers, qp = _auth(conn)
+        try:
+            with httpx.Client(timeout=10, follow_redirects=True) as client:
+                resp = client.get(base, headers=headers, params=qp)
+            return {"ok": resp.status_code < 500,
+                    "message": f"Reached {base} — HTTP {resp.status_code}."}
+        except Exception as e:
+            return {"ok": False, "message": str(e)}
+
     from sqlalchemy import text
     try:
         engine = _engine_for(client_id, conn)

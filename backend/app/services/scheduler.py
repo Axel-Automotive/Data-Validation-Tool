@@ -81,7 +81,11 @@ def run_schedule(schedule_id: str) -> dict:
         if not client:
             raise ValueError("Client no longer exists")
 
-        df_axel = load_df(s["file_axel_id"], s["sheet_axel"])
+        # AXEL side: a saved DB query (live pull) or the pinned file. Imported
+        # lazily to avoid a router/service import cycle at module load.
+        from app.routers.compare import resolve_axel_df
+        df_axel = resolve_axel_df(s["client_id"], s.get("file_axel_id", ""),
+                                  s.get("sheet_axel", ""), s.get("axel_source"))
         df_dms  = load_df(s["file_dms_id"],  s["sheet_dms"])
 
         all_conditions = shared_store.get_all() + client.get("conditions", [])

@@ -5,7 +5,7 @@ import {
   Users, CalendarClock, History, Library,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
-import logoAxel from '../../assets/logo-axel.png'
+import logoAxelOne from '../../assets/logo-axelone.png'
 
 const NAV = [
   { id: 'dashboard',  label: 'Dashboard',           Icon: LayoutDashboard },
@@ -54,9 +54,9 @@ export default function Sidebar({
       <div className="h-full bg-white flex flex-col border-r border-slate-200" style={{ width: WIDTH }}>
 
         {/* ── Brand ── */}
-        <div className="flex items-center gap-2 pl-8 pr-4 h-14 border-b border-slate-100 flex-shrink-0">
-          <img src={logoAxel} alt="AXEL" className="h-4 w-auto flex-shrink-0" />
-          <span className="text-base font-semibold tracking-wide text-slate-600">
+        <div className="flex items-center gap-2.5 pl-4 pr-2 h-14 border-b border-slate-100 flex-shrink-0">
+          <img src={logoAxelOne} alt="AXEL ONE" className="w-auto flex-shrink-0" style={{ height: '0.7rem' }} />
+          <span className="text-sm font-semibold tracking-wide text-slate-500 whitespace-nowrap">
             Validator
           </span>
         </div>

@@ -213,7 +213,7 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
             </div>
           </div>
         ) : (
-          <div className="p-6 space-y-5 max-w-3xl">
+          <div className="p-6 space-y-5">
             {/* Panel header */}
             <div className="pb-5 border-b border-slate-200">
               <h3 className="text-base font-bold text-slate-900">{selectedClient.name}</h3>

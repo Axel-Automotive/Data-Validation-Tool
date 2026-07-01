@@ -1,3 +1,24 @@
 {
-  "schedules": []
+  "schedules": [
+    {
+      "name": "Fred",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "file_axel_id": "0b8edfc8-1dac-4a67-9c8e-5ec8b7e07ae5",
+      "file_dms_id": "0b8edfc8-1dac-4a67-9c8e-5ec8b7e07ae5",
+      "sheet_axel": "Sheet1",
+      "sheet_dms": "Sheet1",
+      "hour": 21,
+      "minute": 48,
+      "days": [
+        "tue"
+      ],
+      "recipients": [
+        "manoj.bonu@xelautomotive.com"
+      ],
+      "enabled": true,
+      "id": "61477247-5310-4953-bae0-a7f2362e7f0d",
+      "last_run": "2026-06-30 21:48:00",
+      "last_status": "Error: 502: SMTP authentication failed. Check SMTP_USER / SMTP_PASSWORD (M365 with MFA requires an app password and SMTP AUTH enabled)."
+    }
+  ]
 }

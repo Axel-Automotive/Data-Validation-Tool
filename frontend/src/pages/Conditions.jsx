@@ -60,7 +60,7 @@ export default function Conditions() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl">
+    <div className="p-6 space-y-5">
       <div>
         <h1 className="text-lg font-bold text-slate-900">Shared Conditions</h1>
         <p className="text-sm text-slate-500 mt-0.5">

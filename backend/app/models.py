@@ -79,6 +79,8 @@ class AxelConnectionRequest(BaseModel):
     password: str = ""                        # blank on update → keep stored secret
     api_base: str = ""
     api_token: str = ""                       # blank on update → keep stored secret
+    api_auth: str = "bearer"                  # "bearer" | "header" | "query" | "none"
+    api_auth_name: str = ""                   # header/param name for header|query auth
 
 
 class AxelQueryParam(BaseModel):
@@ -110,10 +112,11 @@ class Schedule(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     client_id: str
-    file_axel_id: str
+    file_axel_id: str = ""                     # blank when axel_source is a query
     file_dms_id: str
-    sheet_axel: str
+    sheet_axel: str = ""
     sheet_dms: str
+    axel_source: dict | None = None            # {kind:"query", query_id, params} → live DB pull
     hour: int = 8                             # 0-23, local time
     minute: int = 0                           # 0-59
     days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
@@ -126,10 +129,11 @@ class Schedule(BaseModel):
 class ScheduleUpsertRequest(BaseModel):
     name: str
     client_id: str
-    file_axel_id: str
+    file_axel_id: str = ""
     file_dms_id: str
-    sheet_axel: str
+    sheet_axel: str = ""
     sheet_dms: str
+    axel_source: dict | None = None
     hour: int = 8
     minute: int = 0
     days: list[str] = Field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])

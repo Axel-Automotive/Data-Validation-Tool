@@ -31,7 +31,7 @@ export default function Runs() {
   useEffect(() => { refresh() }, [])
 
   return (
-    <div className="p-6 space-y-5 max-w-4xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-6">
         <div>
           <h1 className="text-lg font-bold text-slate-900">Run History</h1>

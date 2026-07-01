@@ -34,6 +34,275 @@
           "metrics": null
         }
       ]
+    },
+    {
+      "id": "000c9aff-3e8c-41a2-a526-f3f2c78abf59",
+      "ts": "2026-06-30 21:09:03",
+      "client_id": "d8f35c51-3ef8-4cf2-85b8-cc7cb8bc08c9",
+      "client_name": "Acme",
+      "kind": "scheduled",
+      "total": 0,
+      "errors": 0,
+      "combined_result_id": null,
+      "email_to": [],
+      "status": "failed",
+      "summary": []
+    },
+    {
+      "id": "de29c940-30fd-458d-baef-f685c5222221",
+      "ts": "2026-06-30 21:36:51",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "manual",
+      "total": 3,
+      "errors": 1,
+      "combined_result_id": "931745b0-3c56-458c-b479-cfba89678c62",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": null,
+          "metrics": {
+            "total_a": 3150,
+            "total_b": 3150,
+            "matched": 3150,
+            "only_in_a": 0,
+            "only_in_b": 0,
+            "match_rate": 100.0
+          }
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": null,
+          "metrics": {
+            "rows_a": 0,
+            "rows_b": 3150,
+            "matched": 0,
+            "passed": 0,
+            "failed": 0,
+            "pass_rate": 0.0,
+            "checks": 1,
+            "unmatched_a": 0,
+            "unmatched_b": 3150
+          }
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: Stock\nNo., Stock \nType, Year, Make, Model, Model\nNo., Model \nType, Body \nStyle, Color, Engine, Retail, Invoice, Lot, Co., Age, Status, VIN, Deal \nNo., Mileage, Custom Vehicle Field1, Custom Vehicle Field2, Custom Vehicle Field3, Custom Vehicle Field4, Custom Vehicle Field5, Custom Vehicle Field6, Custom Vehicle Field7, Custom Vehicle Field8",
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "id": "7de4e347-ee7b-499c-8aa8-b870c14233df",
+      "ts": "2026-06-30 21:38:41",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "manual",
+      "total": 3,
+      "errors": 3,
+      "combined_result_id": "8b2396b6-043d-4b8e-8770-b2466f6f55cf",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": "400: Column 'Stock\nNo.' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": "400: Column 'Year' not found. Available: custid, dedupid, parentdedupid, source, dealerid, customerid, recordid, pager, storeid, storecode, storecode2, namesuffix, firstname, middlename, lastname, fullname, fullname2, displayname, displayname2, companyname, companyname2, birthdate, gender, email1, email2, email3, phone1, phone2, phone3, phone4, address, address2, city, state, county, country, zip, ispremiumcustomer, isbusinessaccount, isactive, optoutflag, optin, optout, optoutdate, donotshare, donotrefresh, donotcall, donotemail, donotmail, donotivr, donotsharedate, donotcalldate, donotemaildate, donotmaildate, donotivrdate, saletype, sourcesalesflag, salesflag, purchasedate, sourceserviceflag, serviceflag, lastservicedate, sourcepartsflag, partsflag, partstype, partscountercode, fleetflag, ispurchasedcomveh, isservicecomveh, isdeleted, deleteddate, custlastupdateddate, custcreateddate, dedupidupdateddate, status, updatedts, createdts",
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "id": "779eda06-30aa-4138-b99b-5b72c4e18841",
+      "ts": "2026-06-30 21:46:00",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "scheduled",
+      "total": 3,
+      "errors": 1,
+      "combined_result_id": "396dbf5e-ff53-4c1e-8e55-9b8d486f50f5",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": null,
+          "metrics": {
+            "total_a": 3150,
+            "total_b": 3150,
+            "matched": 3150,
+            "only_in_a": 0,
+            "only_in_b": 0,
+            "match_rate": 100.0
+          }
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": null,
+          "metrics": {
+            "rows_a": 0,
+            "rows_b": 3150,
+            "matched": 0,
+            "passed": 0,
+            "failed": 0,
+            "pass_rate": 0.0,
+            "checks": 1,
+            "unmatched_a": 0,
+            "unmatched_b": 3150
+          }
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: Stock\nNo., Stock \nType, Year, Make, Model, Model\nNo., Model \nType, Body \nStyle, Color, Engine, Retail, Invoice, Lot, Co., Age, Status, VIN, Deal \nNo., Mileage, Custom Vehicle Field1, Custom Vehicle Field2, Custom Vehicle Field3, Custom Vehicle Field4, Custom Vehicle Field5, Custom Vehicle Field6, Custom Vehicle Field7, Custom Vehicle Field8",
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "id": "bad444e9-cb3c-4cfd-84b8-506edcdba21c",
+      "ts": "2026-06-30 21:46:29",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "scheduled",
+      "total": 3,
+      "errors": 1,
+      "combined_result_id": "3104b33e-2b49-4b12-962a-5564292d0226",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": null,
+          "metrics": {
+            "total_a": 3150,
+            "total_b": 3150,
+            "matched": 3150,
+            "only_in_a": 0,
+            "only_in_b": 0,
+            "match_rate": 100.0
+          }
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": null,
+          "metrics": {
+            "rows_a": 0,
+            "rows_b": 3150,
+            "matched": 0,
+            "passed": 0,
+            "failed": 0,
+            "pass_rate": 0.0,
+            "checks": 1,
+            "unmatched_a": 0,
+            "unmatched_b": 3150
+          }
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: Stock\nNo., Stock \nType, Year, Make, Model, Model\nNo., Model \nType, Body \nStyle, Color, Engine, Retail, Invoice, Lot, Co., Age, Status, VIN, Deal \nNo., Mileage, Custom Vehicle Field1, Custom Vehicle Field2, Custom Vehicle Field3, Custom Vehicle Field4, Custom Vehicle Field5, Custom Vehicle Field6, Custom Vehicle Field7, Custom Vehicle Field8",
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "id": "1472a688-f4bd-45aa-af86-7d0492df2dbc",
+      "ts": "2026-06-30 21:47:21",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "manual",
+      "total": 3,
+      "errors": 1,
+      "combined_result_id": "5af3552f-4ac6-4961-97b1-2b18e42d8eca",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": null,
+          "metrics": {
+            "total_a": 3150,
+            "total_b": 3150,
+            "matched": 3150,
+            "only_in_a": 0,
+            "only_in_b": 0,
+            "match_rate": 100.0
+          }
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": null,
+          "metrics": {
+            "rows_a": 0,
+            "rows_b": 3150,
+            "matched": 0,
+            "passed": 0,
+            "failed": 0,
+            "pass_rate": 0.0,
+            "checks": 1,
+            "unmatched_a": 0,
+            "unmatched_b": 3150
+          }
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: Stock\nNo., Stock \nType, Year, Make, Model, Model\nNo., Model \nType, Body \nStyle, Color, Engine, Retail, Invoice, Lot, Co., Age, Status, VIN, Deal \nNo., Mileage, Custom Vehicle Field1, Custom Vehicle Field2, Custom Vehicle Field3, Custom Vehicle Field4, Custom Vehicle Field5, Custom Vehicle Field6, Custom Vehicle Field7, Custom Vehicle Field8",
+          "metrics": null
+        }
+      ]
+    },
+    {
+      "id": "189e8741-15ad-4655-93a4-aa363896226c",
+      "ts": "2026-06-30 21:48:05",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "scheduled",
+      "total": 0,
+      "errors": 0,
+      "combined_result_id": null,
+      "email_to": [],
+      "status": "failed",
+      "summary": []
     }
   ]
 }

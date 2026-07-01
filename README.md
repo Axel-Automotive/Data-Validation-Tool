@@ -18,20 +18,28 @@ automatically, and email the resulting report.
 - **Clients & conditions** — save validation rules per client and run them all at once
 - **Shared conditions** — rules that apply to every client, run before each client's
   own conditions (managed via `/api/shared-conditions`)
-- **AXEL data sources (per-client SQL)** — instead of uploading an AXEL `.xlsx`, a
-  client can pull its AXEL side live from its **own** SQL Server / Azure SQL database
-  via a saved SELECT query ("one query = one report"). The `.xlsx` upload remains a
-  fully supported option, chosen per run via a toggle on the AXEL side.
+- **AXEL data sources (per-client SQL or API)** — instead of uploading an AXEL
+  `.xlsx`, a client can pull its AXEL side live from its **own** SQL Server / Azure
+  SQL database (a read-only SELECT query) **or** from an HTTP **API** endpoint
+  ("one query = one report"). The `.xlsx` upload remains a fully supported option,
+  chosen per run via a toggle on the AXEL side.
+  - **API sources**: configure a base URL + auth (Bearer token, API-key header,
+    query-param key, or none), then save endpoints (GET/POST) with `:name` params
+    and a JSON path to the row array. Single-response only (no pagination yet).
   - Manage a client's DB connection and report queries under **Settings → AXEL Data
     Source** (with a live **Preview** that loads columns + a sample). On the
     **Dashboard**, switch the AXEL side to **Data source** and pick a query to run.
   - Per-client DB credentials are entered in the app and stored **encrypted at rest**
     (never in git-tracked `clients.json`); only read-only SELECT queries are allowed.
-  - _Not yet wired: scheduled runs from a query, and API (non-DB) sources._
+  - **Schedules can use a data source too** — a scheduled run pulls the AXEL side
+    live from the DB/API (fixed params per schedule), so unattended runs need no
+    fresh upload.
+  - _Not yet: API pagination, dynamic/relative date params, result caching._
 - **Email reports** — send the combined Excel report to a saved recipient list,
   with an editable subject (Microsoft 365 / SMTP)
 - **Schedules** — run a client's validations automatically (e.g. weekdays at 8am)
-  and email the report, unattended
+  and email the report, unattended. The AXEL side can be an uploaded file **or** a
+  live DB query (see AXEL data sources below)
 - **Run history** — every run logged with downloadable reports
 - **Reports persist to disk** and old artifacts are cleaned up automatically
 

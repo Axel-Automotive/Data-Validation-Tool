@@ -4,7 +4,10 @@ import {
   CheckCircle2, AlertTriangle, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import { getSchedules, createSchedule, updateSchedule, deleteSchedule, runScheduleNow, listFiles } from '../api/schedules'
+import { getAxelQueries } from '../api/axelSources'
 import { toast } from '../lib/toast'
+
+const PARAM_INPUT_TYPE = { int: 'number', float: 'number', date: 'date', text: 'text' }
 
 const DAYS = [
   { id: 'mon', label: 'Mon' }, { id: 'tue', label: 'Tue' }, { id: 'wed', label: 'Wed' },
@@ -48,24 +51,40 @@ function ScheduleForm({ initial, clients, files, onSave, onCancel }) {
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
 
+  // AXEL side can be a saved DB query instead of a pinned file.
+  const [axelMode,    setAxelMode]    = useState(initial?.axel_source?.kind === 'query' ? 'query' : 'file')
+  const [queries,     setQueries]     = useState([])
+  const [queryId,     setQueryId]     = useState(initial?.axel_source?.query_id || '')
+  const [queryParams, setQueryParams] = useState(initial?.axel_source?.params || {})
+
+  useEffect(() => {
+    if (!clientId) { setQueries([]); return }
+    getAxelQueries(clientId).then(q => setQueries(Array.isArray(q) ? q : [])).catch(() => setQueries([]))
+  }, [clientId])
+
   const axelFile = files.find(f => f.id === axelId)
   const dmsFile  = files.find(f => f.id === dmsId)
+  const selectedQuery = queries.find(q => q.id === queryId)
   const toggleDay = d => setDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])
 
   const submit = async () => {
     if (!name.trim())      { setError('Give the schedule a name.'); return }
     if (!clientId)         { setError('Select a client.'); return }
-    if (!axelId || !dmsId) { setError('Select both AXEL and DMS files.'); return }
-    if (!sheetAxel || !sheetDms) { setError('Select a sheet for each file.'); return }
+    if (axelMode === 'query') {
+      if (!queryId) { setError('Select an AXEL data-source query.'); return }
+    } else if (!axelId || !sheetAxel) { setError('Select the AXEL file and sheet.'); return }
+    if (!dmsId || !sheetDms) { setError('Select the DMS file and sheet.'); return }
     if (days.length === 0) { setError('Pick at least one day.'); return }
     const [h, m] = time.split(':').map(Number)
     const recipients = recips.split(',').map(s => s.trim()).filter(Boolean)
+    const axelPart = axelMode === 'query'
+      ? { axel_source: { kind: 'query', query_id: queryId, params: queryParams } }
+      : { file_axel_id: axelId, sheet_axel: sheetAxel }
     setSaving(true); setError('')
     try {
       await onSave({
         name: name.trim(), client_id: clientId,
-        file_axel_id: axelId, file_dms_id: dmsId,
-        sheet_axel: sheetAxel, sheet_dms: sheetDms,
+        file_dms_id: dmsId, sheet_dms: sheetDms, ...axelPart,
         hour: h, minute: m, days: DAY_ORDER.filter(d => days.includes(d)),
         recipients, enabled,
       })
@@ -96,37 +115,86 @@ function ScheduleForm({ initial, clients, files, onSave, onCancel }) {
           </Field>
         </div>
 
-        {files.length === 0 ? (
+        {/* AXEL source — a saved DB query (live pull) or a pinned uploaded file */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-500">AXEL Source</label>
+            <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
+              <button type="button" onClick={() => setAxelMode('file')}
+                className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${axelMode === 'file' ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>Uploaded file</button>
+              <button type="button" onClick={() => setAxelMode('query')}
+                className={`px-2.5 py-1 rounded-md text-2xs font-semibold transition-colors ${axelMode === 'query' ? 'bg-white text-brand-700 shadow-card' : 'text-slate-500 hover:text-slate-700'}`}>Data source (SQL)</button>
+            </div>
+          </div>
+
+          {axelMode === 'query' ? (
+            queries.length === 0 ? (
+              <p className="text-xs text-slate-400">No saved queries for this client. Add one in <span className="font-medium text-slate-500">Settings → AXEL Data Source</span>.</p>
+            ) : (
+              <div className="space-y-3">
+                <select value={queryId}
+                  onChange={e => {
+                    const q = queries.find(x => x.id === e.target.value)
+                    const seed = {}; (q?.params || []).forEach(p => { seed[p.name] = queryParams[p.name] ?? (p.default ?? '') })
+                    setQueryId(e.target.value); setQueryParams(seed)
+                  }}
+                  className={selectCls}>
+                  <option value="">— select query —</option>
+                  {queries.map(q => <option key={q.id} value={q.id}>{q.name}</option>)}
+                </select>
+                {(selectedQuery?.params || []).length > 0 && (
+                  <div className="flex flex-wrap gap-2.5">
+                    {selectedQuery.params.map(p => (
+                      <div key={p.name}>
+                        <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{p.label || p.name}{p.required ? ' *' : ''}</label>
+                        <input type={PARAM_INPUT_TYPE[p.type] || 'text'} value={queryParams[p.name] ?? ''}
+                          onChange={e => setQueryParams(pp => ({ ...pp, [p.name]: e.target.value }))}
+                          className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                      </div>
+                    ))}
+                    <p className="w-full text-2xs text-slate-400">Parameter values are fixed for this schedule and used on every automatic run.</p>
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="AXEL File">
+                <select value={axelId} onChange={e => { setAxelId(e.target.value); setSheetAxel('') }} className={selectCls}>
+                  <option value="">— select file —</option>
+                  {files.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </Field>
+              <Field label="AXEL Sheet">
+                <select value={sheetAxel} onChange={e => setSheetAxel(e.target.value)} className={selectCls} disabled={!axelFile}>
+                  <option value="">— select sheet —</option>
+                  {axelFile?.sheets.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+        </div>
+
+        {/* DMS is always an uploaded file */}
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="DMS File">
+            <select value={dmsId} onChange={e => { setDmsId(e.target.value); setSheetDms('') }} className={selectCls}>
+              <option value="">— select file —</option>
+              {files.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </Field>
+          <Field label="DMS Sheet">
+            <select value={sheetDms} onChange={e => setSheetDms(e.target.value)} className={selectCls} disabled={!dmsFile}>
+              <option value="">— select sheet —</option>
+              {dmsFile?.sheets.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        {files.length === 0 && (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-800">No files uploaded yet. Upload AXEL and DMS files in the sidebar first — they're saved and become selectable here.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="AXEL File">
-              <select value={axelId} onChange={e => { setAxelId(e.target.value); setSheetAxel('') }} className={selectCls}>
-                <option value="">— select file —</option>
-                {files.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </Field>
-            <Field label="DMS File">
-              <select value={dmsId} onChange={e => { setDmsId(e.target.value); setSheetDms('') }} className={selectCls}>
-                <option value="">— select file —</option>
-                {files.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </Field>
-            <Field label="AXEL Sheet">
-              <select value={sheetAxel} onChange={e => setSheetAxel(e.target.value)} className={selectCls} disabled={!axelFile}>
-                <option value="">— select sheet —</option>
-                {axelFile?.sheets.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="DMS Sheet">
-              <select value={sheetDms} onChange={e => setSheetDms(e.target.value)} className={selectCls} disabled={!dmsFile}>
-                <option value="">— select sheet —</option>
-                {dmsFile?.sheets.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
+            <p className="text-sm text-amber-800">No files uploaded yet. The DMS side needs an uploaded file — upload one in the sidebar first (it's saved and becomes selectable here).</p>
           </div>
         )}
 
@@ -225,7 +293,7 @@ export default function Schedules({ clients }) {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-4xl">
+    <div className="p-6 space-y-5">
       <div className="flex items-center justify-between gap-6">
         <div>
           <h1 className="text-lg font-bold text-slate-900">Schedules</h1>
@@ -269,6 +337,7 @@ export default function Schedules({ clients }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-slate-900">{s.name}</span>
+                      {s.axel_source?.kind === 'query' && <span className="text-2xs font-medium text-sky-700 bg-sky-50 ring-1 ring-sky-200/60 px-1.5 py-0.5 rounded-full">DB query</span>}
                       {!s.enabled && <span className="text-2xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">Paused</span>}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">

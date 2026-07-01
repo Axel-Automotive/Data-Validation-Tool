@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.models import ScheduleUpsertRequest
 from app.routers.files import file_meta
-from app.services import client_store, email_service, schedule_store, scheduler
+from app.services import axel_query_store, client_store, email_service, schedule_store, scheduler
 
 router = APIRouter()
 
@@ -12,8 +12,12 @@ VALID_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 def _validate(body: ScheduleUpsertRequest) -> dict:
     if not client_store.get_client(body.client_id):
         raise HTTPException(404, "Client not found")
-    if not file_meta(body.file_axel_id):
-        raise HTTPException(400, "AXEL file not found — upload it first.")
+    # AXEL side: a saved DB query (live pull) or a pinned file.
+    if body.axel_source and body.axel_source.get("kind") == "query":
+        if not axel_query_store.get(body.client_id, body.axel_source.get("query_id")):
+            raise HTTPException(400, "AXEL query not found for this client.")
+    elif not file_meta(body.file_axel_id):
+        raise HTTPException(400, "AXEL file not found — upload it first, or use a data-source query.")
     if not file_meta(body.file_dms_id):
         raise HTTPException(400, "DMS file not found — upload it first.")
     if not (0 <= body.hour <= 23) or not (0 <= body.minute <= 59):
