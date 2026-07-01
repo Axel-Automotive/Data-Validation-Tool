@@ -10,31 +10,67 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 router = APIRouter()
 
 # Persist uploaded files to disk so they survive restarts and can be used by
-# scheduled (unattended) runs. Each file is stored as <id>.xlsx + <id>.json.
+# scheduled (unattended) runs. Each file is stored as <id>.<ext> + <id>.json,
+# where <ext> is "xlsx" (Excel) or "csv". CSV files have no worksheets, so they
+# expose a single pseudo-sheet named "CSV" to keep the file+sheet flow uniform.
 FILES_DIR = Path(__file__).parent.parent.parent / "data" / "files"
 
-
-def _data_path(file_id: str) -> Path:
-    return FILES_DIR / f"{file_id}.xlsx"
+CSV_SHEET = "CSV"
 
 
 def _meta_path(file_id: str) -> Path:
     return FILES_DIR / f"{file_id}.json"
 
 
+def _read_meta(file_id: str) -> dict | None:
+    mp = _meta_path(file_id)
+    if not mp.exists():
+        return None
+    try:
+        return json.loads(mp.read_text())
+    except Exception:
+        return None
+
+
+def _data_path(file_id: str, ext: str | None = None) -> Path:
+    # Default to "xlsx" so files uploaded before CSV support (which had no `ext`
+    # in their meta) still resolve to <id>.xlsx.
+    if ext is None:
+        ext = (_read_meta(file_id) or {}).get("ext", "xlsx")
+    return FILES_DIR / f"{file_id}.{ext}"
+
+
+def _read_csv_bytes(content: bytes) -> pd.DataFrame:
+    """Parse CSV bytes, tolerating a BOM and non-UTF-8 encodings."""
+    for enc in ("utf-8-sig", "latin-1"):
+        try:
+            return pd.read_csv(io.BytesIO(content), encoding=enc)
+        except UnicodeDecodeError:
+            continue
+    return pd.read_csv(io.BytesIO(content), encoding="latin-1")
+
+
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     content = await file.read()
+    name = file.filename or "file"
+    is_csv = name.lower().endswith(".csv")
     try:
-        sheets = pd.ExcelFile(io.BytesIO(content)).sheet_names
+        if is_csv:
+            _read_csv_bytes(content)          # validate it parses
+            sheets, ext = [CSV_SHEET], "csv"
+        else:
+            sheets = pd.ExcelFile(io.BytesIO(content)).sheet_names
+            ext = "xlsx"
     except Exception:
-        raise HTTPException(400, "Could not read this file as an Excel workbook (.xlsx/.xls).")
+        raise HTTPException(
+            400, "Could not read this file. Upload an Excel workbook (.xlsx/.xls) or a CSV (.csv)."
+        )
 
     file_id = str(uuid.uuid4())
-    name = file.filename or "file.xlsx"
     FILES_DIR.mkdir(parents=True, exist_ok=True)
-    _data_path(file_id).write_bytes(content)
-    _meta_path(file_id).write_text(json.dumps({"name": name, "sheets": sheets}))
+    _data_path(file_id, ext).write_bytes(content)
+    _meta_path(file_id).write_text(json.dumps({"name": name, "sheets": sheets, "ext": ext}))
     return {"id": file_id, "name": name, "sheets": sheets}
 
 
@@ -55,34 +91,37 @@ def list_files():
 
 @router.get("/{file_id}/columns")
 def get_columns(file_id: str, sheet: str = Query(...)):
-    content = _require(file_id)
-    df = pd.ExcelFile(io.BytesIO(content)).parse(sheet)
+    content, ext = _require(file_id)
+    df = _read_csv_bytes(content) if ext == "csv" else pd.ExcelFile(io.BytesIO(content)).parse(sheet)
     return {"columns": df.columns.tolist(), "rows": len(df), "cols": len(df.columns)}
 
 
 # ── Internal helpers used by compare router & scheduler ─────────────────────────
 
 def load_df(file_id: str, sheet: str) -> pd.DataFrame:
-    content = _require(file_id)
+    content, ext = _require(file_id)
+    if ext == "csv":
+        return _read_csv_bytes(content)
     return pd.ExcelFile(io.BytesIO(content)).parse(sheet)
 
 
 def file_meta(file_id: str) -> dict | None:
-    mp = _meta_path(file_id)
-    if not mp.exists():
-        return None
-    try:
-        d = json.loads(mp.read_text())
-    except Exception:
+    d = _read_meta(file_id)
+    if not d:
         return None
     return {"id": file_id, "name": d.get("name"), "sheets": d.get("sheets", [])}
 
 
-def _require(file_id: str) -> bytes:
-    p = _data_path(file_id)
+def _require(file_id: str) -> tuple[bytes, str]:
+    """Return (file bytes, ext) or raise 404 if the file is missing."""
+    meta = _read_meta(file_id)
+    if not meta:
+        raise HTTPException(404, "File not found — please re-upload.")
+    ext = meta.get("ext", "xlsx")
+    p = _data_path(file_id, ext)
     if not p.exists():
         raise HTTPException(404, "File not found — please re-upload.")
-    return p.read_bytes()
+    return p.read_bytes(), ext
 
 
 def cleanup_old_files(max_age_days: int = 30) -> int:
@@ -109,8 +148,10 @@ def cleanup_old_files(max_age_days: int = 30) -> int:
             continue
         try:
             if meta.stat().st_mtime < cutoff:
+                # Resolve the data file BEFORE removing meta (meta records the ext).
+                data_file = _data_path(fid)
                 meta.unlink(missing_ok=True)
-                _data_path(fid).unlink(missing_ok=True)
+                data_file.unlink(missing_ok=True)
                 removed += 1
         except OSError:
             pass

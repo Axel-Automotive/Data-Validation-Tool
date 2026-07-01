@@ -1,7 +1,8 @@
 # AXEL Validator
 
 A data‑validation tool for reconciling AXEL company spreadsheets against DMS
-(dealer management system) exports. Upload two Excel files, define reusable
+(dealer management system) exports. Upload two files (**Excel `.xlsx/.xls` or
+`.csv`**) — or pull the AXEL side live from a database/API — define reusable
 validation **conditions** per client, run them on demand, schedule them to run
 automatically, and email the resulting report.
 

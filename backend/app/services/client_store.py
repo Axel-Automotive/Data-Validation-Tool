@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from app.database import session_scope
 from app.models.tables import Client, Condition, client_dict, condition_dict
@@ -11,7 +12,10 @@ from app.models.tables import Client, Condition, client_dict, condition_dict
 
 def get_all_clients() -> list[dict]:
     with session_scope() as db:
-        return [client_dict(c) for c in db.query(Client).all()]
+        # Eager-load conditions in one extra query instead of N lazy loads
+        # (client_dict touches c.conditions for every client).
+        clients = db.query(Client).options(selectinload(Client.conditions)).all()
+        return [client_dict(c) for c in clients]
 
 
 def get_client(client_id: str) -> dict | None:
