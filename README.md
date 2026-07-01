@@ -53,8 +53,15 @@ frontend/   React + Vite + Tailwind UI (src/)
 start.sh    Launch backend + frontend together for local dev
 ```
 
-Data is stored under `backend/data/`:
-`clients.json`, `schedules.json`, `runs.json`, `files/`, `results/`.
+Application data (clients, conditions, schedules, runs, AXEL queries/connections)
+is stored in a **database via SQLAlchemy** — a local **SQLite** file
+(`backend/data/axel_validator.db`) by default, or any DB via the `DATABASE_URL`
+env var (e.g. Azure SQL / PostgreSQL). Uploaded files and generated reports still
+live on disk under `backend/data/files/` and `backend/data/results/`.
+
+> **First-boot migration:** if legacy `backend/data/*.json` stores exist, they are
+> imported into the database on startup and renamed to `*.json.bak` (kept as a
+> backup). This is automatic and idempotent.
 
 ---
 

@@ -1,78 +1,77 @@
-"""JSON-file-backed store for scheduled runs."""
+"""Scheduled runs, backed by the database.
+
+Scalar scheduling fields are columns; data-source fields (file ids, sheets, the
+query source ref, recipient overrides) live in a JSON `config` column. The store
+reassembles the flat schedule dict the app/frontend expect on the way out.
+"""
 from __future__ import annotations
-import json
-import os
-import threading
-import uuid
-from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-DATA_FILE = DATA_DIR / "schedules.json"
+from datetime import datetime
 
-_lock = threading.RLock()
+from app.database import session_scope
+from app.models.tables import SCHED_CONFIG_KEYS, Schedule, schedule_dict
+
+TS_FMT = "%Y-%m-%d %H:%M:%S"
+_COL_KEYS = ("name", "client_id", "hour", "minute", "days", "enabled")
 
 
-def _load() -> dict:
-    if not DATA_FILE.exists():
-        return {"schedules": []}
-    try:
-        return json.loads(DATA_FILE.read_text())
-    except Exception:
-        return {"schedules": []}
-
-
-def _save(data: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = DATA_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    os.replace(tmp, DATA_FILE)
+def _split(data: dict) -> tuple[dict, dict]:
+    cols = {k: data[k] for k in _COL_KEYS if k in data}
+    config = {k: data[k] for k in SCHED_CONFIG_KEYS if k in data}
+    return cols, config
 
 
 def get_all() -> list[dict]:
-    return _load()["schedules"]
+    with session_scope() as db:
+        return [schedule_dict(s) for s in db.query(Schedule).all()]
 
 
 def get(schedule_id: str) -> dict | None:
-    return next((s for s in get_all() if s["id"] == schedule_id), None)
+    with session_scope() as db:
+        s = db.get(Schedule, schedule_id)
+        return schedule_dict(s) if s else None
 
 
 def create(schedule: dict) -> dict:
-    with _lock:
-        schedule = {**schedule, "id": str(uuid.uuid4()), "last_run": None, "last_status": None}
-        data = _load()
-        data["schedules"].append(schedule)
-        _save(data)
-        return schedule
+    cols, config = _split(schedule)
+    with session_scope() as db:
+        s = Schedule(**cols, config=config, last_run=None, last_status=None)
+        db.add(s)
+        db.flush()
+        return schedule_dict(s)
 
 
 def update(schedule_id: str, updates: dict) -> dict | None:
-    with _lock:
-        data = _load()
-        for s in data["schedules"]:
-            if s["id"] == schedule_id:
-                s.update({k: v for k, v in updates.items() if k != "id"})
-                _save(data)
-                return s
-        return None
+    cols, config = _split(updates)
+    with session_scope() as db:
+        s = db.get(Schedule, schedule_id)
+        if not s:
+            return None
+        for k, v in cols.items():
+            setattr(s, k, v)
+        merged = dict(s.config or {})
+        merged.update(config)
+        s.config = merged
+        db.flush()
+        return schedule_dict(s)
 
 
 def delete(schedule_id: str) -> bool:
-    with _lock:
-        data = _load()
-        before = len(data["schedules"])
-        data["schedules"] = [s for s in data["schedules"] if s["id"] != schedule_id]
-        if len(data["schedules"]) < before:
-            _save(data)
-            return True
-        return False
+    with session_scope() as db:
+        s = db.get(Schedule, schedule_id)
+        if not s:
+            return False
+        db.delete(s)
+        return True
 
 
 def mark_run(schedule_id: str, status: str, when: str) -> None:
-    with _lock:
-        data = _load()
-        for s in data["schedules"]:
-            if s["id"] == schedule_id:
-                s["last_run"] = when
-                s["last_status"] = status
-                _save(data)
-                return
+    with session_scope() as db:
+        s = db.get(Schedule, schedule_id)
+        if not s:
+            return
+        try:
+            s.last_run = datetime.strptime(when, TS_FMT)
+        except (TypeError, ValueError):
+            s.last_run = datetime.now()
+        s.last_status = status

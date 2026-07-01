@@ -1,38 +1,21 @@
-"""JSON-file-backed log of validation runs (manual, emailed, scheduled)."""
+"""Log of validation runs (manual, emailed, scheduled), backed by the database."""
 from __future__ import annotations
-import json
-import os
-import threading
-import uuid
+
 from datetime import datetime
-from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-DATA_FILE = DATA_DIR / "runs.json"
+from app.database import session_scope
+from app.models.tables import Run, run_dict
 
-_lock = threading.RLock()
 MAX_RUNS = 500   # keep the most recent N records
-
-
-def _load() -> dict:
-    if not DATA_FILE.exists():
-        return {"runs": []}
-    try:
-        return json.loads(DATA_FILE.read_text())
-    except Exception:
-        return {"runs": []}
-
-
-def _save(data: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = DATA_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    os.replace(tmp, DATA_FILE)
 
 
 def get_all() -> list[dict]:
     # Most recent first.
-    return list(reversed(_load()["runs"]))
+    with session_scope() as db:
+        rows = (db.query(Run)
+                  .order_by(Run.timestamp.desc(), Run.id.desc())
+                  .limit(MAX_RUNS).all())
+        return [run_dict(r) for r in rows]
 
 
 def record(
@@ -57,23 +40,20 @@ def record(
         }
         for c in conditions
     ]
-    entry = {
-        "id": str(uuid.uuid4()),
-        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "client_id": client_id,
-        "client_name": client_name,
-        "kind": kind,
-        "total": n_total,
-        "errors": n_error,
-        "combined_result_id": combined_result_id,
-        "email_to": email_to or [],
-        "status": status,
-        "summary": summary,
-    }
-    with _lock:
-        data = _load()
-        data["runs"].append(entry)
-        if len(data["runs"]) > MAX_RUNS:
-            data["runs"] = data["runs"][-MAX_RUNS:]
-        _save(data)
-    return entry
+    with session_scope() as db:
+        r = Run(
+            client_id=client_id or None, client_name=client_name, kind=kind,
+            total=n_total, errors=n_error, combined_result_id=combined_result_id,
+            email_to=email_to or [], status=status, summary_metrics=summary,
+            timestamp=datetime.now(),
+        )
+        db.add(r)
+        db.flush()
+        result = run_dict(r)
+        # Trim to the most recent MAX_RUNS.
+        stale = [x.id for x in (db.query(Run.id)
+                                  .order_by(Run.timestamp.desc(), Run.id.desc())
+                                  .offset(MAX_RUNS).all())]
+        if stale:
+            db.query(Run).filter(Run.id.in_(stale)).delete(synchronize_session=False)
+        return result

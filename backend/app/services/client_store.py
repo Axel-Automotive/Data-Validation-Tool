@@ -1,136 +1,117 @@
-"""JSON-file-backed store for clients and their conditions."""
+"""Clients + their conditions, backed by the database (see app.database)."""
 from __future__ import annotations
-import json
-import os
-import threading
-import uuid
-from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-DATA_FILE = DATA_DIR / "clients.json"
+from sqlalchemy import func
 
-# Sync endpoints run in a threadpool, so concurrent read-modify-write cycles can
-# interleave and silently drop one another's changes. Serialise all mutations.
-_lock = threading.RLock()
-
-
-def _load() -> dict:
-    if not DATA_FILE.exists():
-        return {"clients": []}
-    try:
-        return json.loads(DATA_FILE.read_text())
-    except Exception:
-        return {"clients": []}
-
-
-def _save(data: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Write to a temp file then atomically replace, so a crash mid-write can't
-    # leave clients.json truncated/corrupt.
-    tmp = DATA_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    os.replace(tmp, DATA_FILE)
+from app.database import session_scope
+from app.models.tables import Client, Condition, client_dict, condition_dict
 
 
 # ── Clients ───────────────────────────────────────────────────────────────────
 
 def get_all_clients() -> list[dict]:
-    return _load()["clients"]
+    with session_scope() as db:
+        return [client_dict(c) for c in db.query(Client).all()]
 
 
 def get_client(client_id: str) -> dict | None:
-    return next((c for c in get_all_clients() if c["id"] == client_id), None)
+    with session_scope() as db:
+        c = db.get(Client, client_id)
+        return client_dict(c) if c else None
 
 
 def create_client(name: str) -> dict:
-    with _lock:
-        client = {"id": str(uuid.uuid4()), "name": name, "conditions": [], "recipients": []}
-        data = _load()
-        data["clients"].append(client)
-        _save(data)
-        return client
+    with session_scope() as db:
+        c = Client(name=name, recipients=[], email_subject="")
+        db.add(c)
+        db.flush()
+        return client_dict(c)
 
 
 def update_email_settings(client_id: str, recipients: list[str], subject: str) -> dict | None:
-    with _lock:
-        data = _load()
-        for c in data["clients"]:
-            if c["id"] == client_id:
-                c["recipients"] = recipients
-                c["email_subject"] = subject
-                _save(data)
-                return c
-        return None
+    with session_scope() as db:
+        c = db.get(Client, client_id)
+        if not c:
+            return None
+        c.recipients = recipients
+        c.email_subject = subject
+        db.flush()
+        return client_dict(c)
 
 
 def update_client(client_id: str, name: str) -> dict | None:
-    with _lock:
-        data = _load()
-        for c in data["clients"]:
-            if c["id"] == client_id:
-                c["name"] = name
-                _save(data)
-                return c
-        return None
+    with session_scope() as db:
+        c = db.get(Client, client_id)
+        if not c:
+            return None
+        c.name = name
+        db.flush()
+        return client_dict(c)
 
 
 def delete_client(client_id: str) -> bool:
-    with _lock:
-        data = _load()
-        before = len(data["clients"])
-        data["clients"] = [c for c in data["clients"] if c["id"] != client_id]
-        if len(data["clients"]) < before:
-            _save(data)
-            return True
-        return False
+    with session_scope() as db:
+        c = db.get(Client, client_id)
+        if not c:
+            return False
+        db.delete(c)
+        return True
 
 
 # ── Conditions ────────────────────────────────────────────────────────────────
 
+def _next_position(db, client_id: str) -> int:
+    m = db.query(func.max(Condition.position)).filter(Condition.client_id == client_id).scalar()
+    return (m or 0) + 1
+
+
 def add_condition(client_id: str, condition: dict) -> dict | None:
-    with _lock:
-        data = _load()
-        for c in data["clients"]:
-            if c["id"] == client_id:
-                condition = {**condition, "id": str(uuid.uuid4())}
-                c["conditions"].append(condition)
-                _save(data)
-                return condition
-        return None
+    with session_scope() as db:
+        if not db.get(Client, client_id):
+            return None
+        cond = Condition(
+            client_id=client_id, is_shared=False, position=_next_position(db, client_id),
+            name=condition.get("name"), validation_name=condition.get("validation_name", ""),
+            type=condition.get("type"), enabled=condition.get("enabled", True),
+            config=condition.get("config", {}),
+        )
+        db.add(cond)
+        db.flush()
+        return condition_dict(cond)
 
 
 def update_condition(client_id: str, condition_id: str, updates: dict) -> dict | None:
-    with _lock:
-        data = _load()
-        for c in data["clients"]:
-            if c["id"] == client_id:
-                for cond in c["conditions"]:
-                    if cond["id"] == condition_id:
-                        cond.update({k: v for k, v in updates.items() if k != "id"})
-                        _save(data)
-                        return cond
-        return None
+    with session_scope() as db:
+        cond = db.query(Condition).filter(
+            Condition.id == condition_id, Condition.client_id == client_id).first()
+        if not cond:
+            return None
+        for k in ("name", "validation_name", "type", "enabled", "config"):
+            if k in updates:
+                setattr(cond, k, updates[k])
+        db.flush()
+        return condition_dict(cond)
 
 
 def delete_condition(client_id: str, condition_id: str) -> bool:
-    with _lock:
-        data = _load()
-        for c in data["clients"]:
-            if c["id"] == client_id:
-                before = len(c["conditions"])
-                c["conditions"] = [cd for cd in c["conditions"] if cd["id"] != condition_id]
-                if len(c["conditions"]) < before:
-                    _save(data)
-                    return True
-        return False
+    with session_scope() as db:
+        cond = db.query(Condition).filter(
+            Condition.id == condition_id, Condition.client_id == client_id).first()
+        if not cond:
+            return False
+        db.delete(cond)
+        return True
 
 
 def reorder_conditions(client_id: str, ordered_ids: list[str]) -> list[dict] | None:
-    data = _load()
-    for c in data["clients"]:
-        if c["id"] == client_id:
-            lookup = {cd["id"]: cd for cd in c["conditions"]}
-            c["conditions"] = [lookup[oid] for oid in ordered_ids if oid in lookup]
-            _save(data)
-            return c["conditions"]
-    return None
+    with session_scope() as db:
+        conds = {c.id: c for c in db.query(Condition).filter(Condition.client_id == client_id).all()}
+        if not conds:
+            return None
+        pos = 1
+        for oid in ordered_ids:
+            if oid in conds:
+                conds[oid].position = pos
+                pos += 1
+        db.flush()
+        return [condition_dict(conds[oid]) for oid in ordered_ids if oid in conds]

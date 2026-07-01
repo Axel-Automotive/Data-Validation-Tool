@@ -15,7 +15,7 @@
       "recipients": [
         "manoj.bonu@xelautomotive.com"
       ],
-      "enabled": true,
+      "enabled": false,
       "id": "61477247-5310-4953-bae0-a7f2362e7f0d",
       "last_run": "2026-06-30 21:48:00",
       "last_status": "Error: 502: SMTP authentication failed. Check SMTP_USER / SMTP_PASSWORD (M365 with MFA requires an app password and SMTP AUTH enabled)."

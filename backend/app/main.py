@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # Load backend/.env (SMTP credentials etc.) before anything reads os.getenv.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+from app.database import init_db
+from app.db_migrate import run_migration
 from app.routers import files, compare, clients, schedules, runs, shared
 from app.services import scheduler
 from app.services.excel_service import cleanup_old_results
@@ -16,6 +18,8 @@ from app.routers.files import cleanup_old_files
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()                   # create tables (SQLite by default; DATABASE_URL to override)
+    run_migration()             # import legacy data/*.json on first boot, then back them up
     cleanup_old_results()       # drop result files older than the retention window
     cleanup_old_files()         # drop orphaned uploaded files older than the window
     scheduler.start()           # register all enabled schedules as background jobs

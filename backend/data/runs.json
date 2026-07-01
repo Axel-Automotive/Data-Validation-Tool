@@ -303,6 +303,58 @@
       "email_to": [],
       "status": "failed",
       "summary": []
+    },
+    {
+      "id": "8932ce42-6b6f-4239-8926-6d576177a26b",
+      "ts": "2026-06-30 22:22:28",
+      "client_id": "82e3c1d2-aaed-4675-a141-f8d3834d2b7c",
+      "client_name": "Fredbeans",
+      "kind": "manual",
+      "total": 3,
+      "errors": 1,
+      "combined_result_id": "76fc3b4a-d131-474f-bd51-cd7e498d8db7",
+      "email_to": [],
+      "status": "errors",
+      "summary": [
+        {
+          "name": "Difference",
+          "validation_name": "",
+          "type": "sheet_diff",
+          "error": null,
+          "metrics": {
+            "total_a": 3150,
+            "total_b": 3150,
+            "matched": 3150,
+            "only_in_a": 0,
+            "only_in_b": 0,
+            "match_rate": 100.0
+          }
+        },
+        {
+          "name": "Equals",
+          "validation_name": "",
+          "type": "custom_rule",
+          "error": null,
+          "metrics": {
+            "rows_a": 0,
+            "rows_b": 3150,
+            "matched": 0,
+            "passed": 0,
+            "failed": 0,
+            "pass_rate": 0.0,
+            "checks": 1,
+            "unmatched_a": 0,
+            "unmatched_b": 3150
+          }
+        },
+        {
+          "name": "stacked",
+          "validation_name": "",
+          "type": "stacked",
+          "error": "400: Column '' not found. Available: Stock\nNo., Stock \nType, Year, Make, Model, Model\nNo., Model \nType, Body \nStyle, Color, Engine, Retail, Invoice, Lot, Co., Age, Status, VIN, Deal \nNo., Mileage, Custom Vehicle Field1, Custom Vehicle Field2, Custom Vehicle Field3, Custom Vehicle Field4, Custom Vehicle Field5, Custom Vehicle Field6, Custom Vehicle Field7, Custom Vehicle Field8",
+          "metrics": null
+        }
+      ]
     }
   ]
 }
