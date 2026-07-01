@@ -163,7 +163,9 @@ def _bind_params(query: dict, params: dict | None) -> dict:
             elif ptype == "float":
                 out[name] = float(val)
             else:  # text, date — bound as strings; the driver/DB casts dates.
-                out[name] = str(val)
+                # Expand date macros in the value too, so a macro placed in a
+                # param default works for both DB (bound) and API sources.
+                out[name] = parse_date_macros(str(val))
         except (TypeError, ValueError):
             raise HTTPException(400, f"Parameter {name} is not a valid {ptype}.")
     return out
@@ -212,9 +214,17 @@ def _run_db(client_id: str, conn: dict, query: dict, params: dict | None,
 # ── API sources ────────────────────────────────────────────────────────────
 
 def _subst(obj, bound: dict):
-    """Replace :name placeholders in strings (recursing into dicts/lists)."""
+    """Replace :name placeholders in strings (recursing into dicts/lists).
+
+    A value that is exactly ":name" keeps its native type (int/float/str) so
+    numeric params stay numbers in a JSON body. Longest names are replaced first
+    so ':id' can't clobber ':id_long'.
+    """
     if isinstance(obj, str):
-        for k, v in bound.items():
+        if obj.startswith(":") and obj[1:] in bound:   # whole-value → preserve type
+            return bound[obj[1:]]
+        for k in sorted(bound, key=len, reverse=True):
+            v = bound[k]
             obj = obj.replace(f":{k}", "" if v is None else str(v))
         return obj
     if isinstance(obj, dict):
@@ -226,7 +236,8 @@ def _subst(obj, bound: dict):
 
 def _subst_url(url: str, bound: dict) -> str:
     from urllib.parse import quote
-    for k, v in bound.items():
+    for k in sorted(bound, key=len, reverse=True):   # longest first (prefix safety)
+        v = bound[k]
         url = url.replace(f":{k}", quote("" if v is None else str(v), safe=""))
     return url
 
