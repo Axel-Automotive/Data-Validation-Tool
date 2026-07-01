@@ -216,7 +216,7 @@ function QueryEditor({ clientId, initial, onSaved, onCancel }) {
               </select>
             </div>
             <div>
-              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Path (relative to base URL — use :name for params)</label>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{'Path (relative to base URL — :name params · date macros: {{ TODAY }}, {{ DAYS_AGO(n) }})'}</label>
               <input value={q.api_path} onChange={e => set('api_path', e.target.value)} spellCheck={false}
                 placeholder="/reports/daily-sales?from=:from_date"
                 className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />
@@ -238,7 +238,7 @@ function QueryEditor({ clientId, initial, onSaved, onCancel }) {
         </div>
       ) : (
         <div>
-          <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">SQL (read-only SELECT — use :name for parameters)</label>
+          <label className="block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{'SQL (read-only SELECT — :name params · date macros: {{ TODAY }}, {{ YESTERDAY }}, {{ FIRST_DAY_OF_MONTH }}, {{ DAYS_AGO(n) }})'}</label>
           <textarea value={q.sql} onChange={e => set('sql', e.target.value)} rows={5} spellCheck={false}
             placeholder={'SELECT id, total\nFROM dbo.Orders\nWHERE sale_date >= :from_date'}
             className="w-full font-mono text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" />

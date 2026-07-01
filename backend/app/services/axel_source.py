@@ -10,6 +10,7 @@ for file-only clients that never configure a DB source.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 
 import pandas as pd
 from fastapi import HTTPException
@@ -29,6 +30,42 @@ _FORBIDDEN = re.compile(
     r"EXEC|EXECUTE|SP_|XP_|INTO|BACKUP|RESTORE|SHUTDOWN|RECONFIGURE)\b",
     re.IGNORECASE,
 )
+
+
+# ── Dynamic date macros ───────────────────────────────────────────────────────
+# Let scheduled/unattended runs pull relative windows. Macros are expanded to a
+# literal YYYY-MM-DD (from the server's current date) just before execution, in
+# SQL text, API URLs/query strings, and JSON bodies. Values come only from the
+# clock and a digit-only DAYS_AGO(n), so there's nothing user-injectable here.
+
+_MACRO_DAYS_AGO = re.compile(r"(?i)\{\{\s*days_ago\((\d+)\)\s*\}\}")
+
+
+def parse_date_macros(text: str) -> str:
+    """Replace {{ TODAY }}, {{ YESTERDAY }}, {{ FIRST_DAY_OF_MONTH }}, and
+    {{ DAYS_AGO(n) }} with YYYY-MM-DD. Non-strings pass through unchanged."""
+    if not isinstance(text, str) or not text:
+        return text
+    today = datetime.now().date()
+    text = re.sub(r"(?i)\{\{\s*today\s*\}\}", today.strftime("%Y-%m-%d"), text)
+    text = re.sub(r"(?i)\{\{\s*yesterday\s*\}\}",
+                  (today - timedelta(days=1)).strftime("%Y-%m-%d"), text)
+    text = re.sub(r"(?i)\{\{\s*first_day_of_month\s*\}\}",
+                  today.replace(day=1).strftime("%Y-%m-%d"), text)
+    text = _MACRO_DAYS_AGO.sub(
+        lambda m: (today - timedelta(days=int(m.group(1)))).strftime("%Y-%m-%d"), text)
+    return text
+
+
+def _expand_macros(obj):
+    """Recursively apply parse_date_macros to strings within dicts/lists."""
+    if isinstance(obj, str):
+        return parse_date_macros(obj)
+    if isinstance(obj, dict):
+        return {k: _expand_macros(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_macros(x) for x in obj]
+    return obj
 
 
 # ── SQL validation ──────────────────────────────────────────────────────────
@@ -151,7 +188,8 @@ def _run_db(client_id: str, conn: dict, query: dict, params: dict | None,
             limit: int | None) -> pd.DataFrame:
     from sqlalchemy import text
 
-    sql = validate_sql(query.get("sql", ""))
+    # Expand dynamic date macros before validating/executing (e.g. {{ YESTERDAY }}).
+    sql = validate_sql(parse_date_macros(query.get("sql", "")))
     bound = _bind_params(query, params)
     cap = limit or query.get("row_limit") or DEFAULT_ROW_LIMIT
 
@@ -227,7 +265,8 @@ def _run_api(conn: dict, query: dict, params: dict | None, limit: int | None) ->
 
     bound = _bind_params(query, params)
     path = query.get("api_path") or ""
-    url = _subst_url(base + ("/" + path.lstrip("/") if path else ""), bound)
+    # :name params first, then dynamic date macros (path + embedded query string).
+    url = parse_date_macros(_subst_url(base + ("/" + path.lstrip("/") if path else ""), bound))
     method = (query.get("api_method") or "GET").upper()
     headers, qp = _auth(conn)
     cap = limit or query.get("row_limit") or DEFAULT_ROW_LIMIT
@@ -241,7 +280,8 @@ def _run_api(conn: dict, query: dict, params: dict | None, limit: int | None) ->
     try:
         with httpx.Client(timeout=QUERY_TIMEOUT_S, follow_redirects=True) as client:
             if method == "POST":
-                resp = client.post(url, headers=headers, json=_subst(query.get("api_body") or {}, bound))
+                body = _expand_macros(_subst(query.get("api_body") or {}, bound))
+                resp = client.post(url, headers=headers, json=body)
             else:
                 resp = client.get(url, headers=headers)
         resp.raise_for_status()

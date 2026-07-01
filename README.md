@@ -33,9 +33,12 @@ automatically, and email the resulting report.
   - Per-client DB credentials are entered in the app and stored **encrypted at rest**
     (never in git-tracked `clients.json`); only read-only SELECT queries are allowed.
   - **Schedules can use a data source too** — a scheduled run pulls the AXEL side
-    live from the DB/API (fixed params per schedule), so unattended runs need no
-    fresh upload.
-  - _Not yet: API pagination, dynamic/relative date params, result caching._
+    live from the DB/API, so unattended runs need no fresh upload.
+  - **Dynamic date macros** — put `{{ TODAY }}`, `{{ YESTERDAY }}`,
+    `{{ FIRST_DAY_OF_MONTH }}`, or `{{ DAYS_AGO(n) }}` in the SQL, API path/query
+    string, or JSON body; they expand to `YYYY-MM-DD` (server date) at run time, so
+    a schedule can pull e.g. "yesterday's data" every night.
+  - _Not yet: API pagination, result caching._
 - **Email reports** — send the combined Excel report to a saved recipient list,
   with an editable subject (Microsoft 365 / SMTP)
 - **Schedules** — run a client's validations automatically (e.g. weekdays at 8am)
