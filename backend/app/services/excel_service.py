@@ -5,6 +5,7 @@ import json
 import re
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -863,12 +864,35 @@ def run_condition(df_axel: pd.DataFrame, df_dms: pd.DataFrame, ctype: str, confi
 
 # ── Combined "run all" report ─────────────────────────────────────────────────
 
+# RAG (Red/Amber/Green) health from a condition's primary rate. Paired with an
+# icon + word so it never relies on colour alone (accessibility).
+_RAG_GREEN, _RAG_AMBER, _RAG_RED = "C6EFCE", "FFEB9C", "FFC7CE"
+
+
+def _rag(rate: float) -> tuple[str, str]:
+    if rate >= 99.95:
+        return "✓ Pass", _RAG_GREEN
+    if rate >= 90:
+        return "⚠ At-risk", _RAG_AMBER
+    return "✗ Fail", _RAG_RED
+
+
+# The metric that drives each type's RAG health.
+_RATE_KEY = {"sheet_diff": "match_rate", "stacked": "pair_rate",
+             "calc_diff": "match_rate", "custom_rule": "pass_rate",
+             "agg_compare": "pass_rate"}
+
+
 def run_all_conditions(
     conditions: list[dict],
     df_axel: pd.DataFrame,
     df_dms: pd.DataFrame,
+    run_info: dict | None = None,
 ) -> tuple[str, list[dict]]:
-    """Run every enabled condition and produce a single combined Excel."""
+    """Run every enabled condition and produce a single combined Excel.
+
+    `run_info` (optional) carries source context for the audit sheet:
+    {axel_name, axel_sheet, dms_name, dms_sheet}."""
     enabled = [c for c in conditions if c.get("enabled", True)]
     if not enabled:
         raise HTTPException(400, "No enabled conditions to run.")
@@ -894,13 +918,20 @@ def run_all_conditions(
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         # ── Summary sheet ───────────────────────────────────────────────────
         summary_rows = []
+        health_counts = {"✓ Pass": 0, "⚠ At-risk": 0, "✗ Fail": 0}
+        health_cells: list[tuple[int, str]] = []   # (excel row, fill colour)
         for i, item in enumerate(results):
             cond = item["condition"]
             m    = item["result"]["metrics"]
+            rate = m.get(_RATE_KEY.get(cond["type"], ""), 0)
+            health, fill = _rag(rate)
+            health_counts[health] += 1
+            health_cells.append((i + 2, fill))       # +2: header row + 1-based
             row  = {
                 "#": i + 1,
                 "Condition": cond["name"],
                 "Type": type_labels.get(cond["type"], cond["type"]),
+                "Health": health,
                 "Status": "✓ OK",
             }
             if cond["type"] == "sheet_diff":
@@ -926,10 +957,36 @@ def run_all_conditions(
                 "#": "—",
                 "Condition": item["condition"]["name"],
                 "Type": type_labels.get(item["condition"]["type"], item["condition"]["type"]),
+                "Health": "✗ Error",
                 "Status": f"✗ {item['error']}"
             })
 
+        # Totals row summarising overall health.
+        summary_rows.append({
+            "#": "", "Condition": "TOTALS",
+            "Type": f"{len(results)} run, {len(errors)} error(s)",
+            "Health": f"{health_counts['✓ Pass']} Pass / {health_counts['⚠ At-risk']} At-risk / {health_counts['✗ Fail']} Fail",
+        })
+
         pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+
+        # ── Run Info (lightweight audit trail) ──────────────────────────────
+        ri = run_info or {}
+        info_rows = [
+            ("Generated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            ("AXEL source", ri.get("axel_name", "—")),
+            ("AXEL sheet", ri.get("axel_sheet", "—")),
+            ("AXEL rows × cols", f"{len(df_axel)} × {df_axel.shape[1]}"),
+            ("DMS source", ri.get("dms_name", "—")),
+            ("DMS sheet", ri.get("dms_sheet", "—")),
+            ("DMS rows × cols", f"{len(df_dms)} × {df_dms.shape[1]}"),
+            ("Conditions run", len(results)),
+            ("Errors", len(errors)),
+            ("Pass / At-risk / Fail",
+             f"{health_counts['✓ Pass']} / {health_counts['⚠ At-risk']} / {health_counts['✗ Fail']}"),
+        ]
+        pd.DataFrame(info_rows, columns=["Field", "Value"]).to_excel(
+            writer, sheet_name="Run Info", index=False)
 
         # ── Per-condition sheets (full data via _frames) ────────────────────
         used_names: set[str] = {"Summary"}
@@ -962,6 +1019,22 @@ def run_all_conditions(
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_w + 4, 40)
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
+
+    # RAG-colour the Health column (paired with its icon+word, never colour-only).
+    health_col = {c.value: c.column for c in ws[1]}.get("Health")
+    if health_col:
+        for excel_row, fill in health_cells:
+            ws.cell(row=excel_row, column=health_col).fill = \
+                PatternFill(start_color=fill, end_color=fill, fill_type="solid")
+
+    # Style Run Info header to match.
+    if "Run Info" in wb.sheetnames:
+        wsi = wb["Run Info"]
+        for cell in wsi[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+        wsi.column_dimensions["A"].width = 22
+        wsi.column_dimensions["B"].width = 40
 
     out = io.BytesIO(); wb.save(out); out.seek(0)
     result_id = _save_result(out.getvalue(), "ValidationReport.xlsx")

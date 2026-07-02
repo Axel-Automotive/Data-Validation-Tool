@@ -281,6 +281,23 @@ def test_run_all_combined_report_full_rows_numeric():
     assert isinstance(ws.cell(row=2, column=2).value, (int, float))
 
 
+def test_run_all_has_rag_health_and_run_info():
+    a = pd.DataFrame({"K": ["1", "2", "3"], "V": [100, 200, 300]})
+    b = pd.DataFrame({"K": ["1", "2", "3"], "V": [100, 200, 300]})   # perfect match
+    conds = [{"id": "c1", "name": "Vals", "type": "calc_diff", "enabled": True,
+              "config": {"key_axel": "K", "val_axel": "V", "val_dms": "V"}}]
+    rid, _ = run_all_conditions(conds, a, b, {"axel_name": "a.xlsx", "dms_name": "b.csv"})
+    wb = load_workbook(io.BytesIO(get_result(rid)[0]))
+    assert "Run Info" in wb.sheetnames
+    ws = wb["Summary"]
+    hdr = [c.value for c in ws[1]]
+    assert "Health" in hdr
+    health = ws.cell(row=2, column=hdr.index("Health") + 1).value
+    assert health == "✓ Pass"                         # 100% match → green/Pass
+    # Totals row present.
+    assert ws.cell(row=ws.max_row, column=2).value == "TOTALS"
+
+
 # ── Row filtering ──────────────────────────────────────────────────────────────
 
 def test_apply_filters_eq_and_numeric():

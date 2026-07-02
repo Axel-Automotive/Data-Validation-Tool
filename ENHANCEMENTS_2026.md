@@ -121,6 +121,8 @@ create false pairs). Confirmed a category standard
 
 ---
 
+> **Progress (2026-07-02):** Tier 3 COMPLETE — T3.1, T3.2, T3.3 shipped with tests.
+
 ## Tier 3 — Observability & trust for unattended runs
 
 ### T3.1 — Structured run logging + failure/anomaly alerts 🟡  *(old P6)*

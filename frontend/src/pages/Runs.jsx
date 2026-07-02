@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react'
-import { History, Download, CheckCircle2, AlertTriangle, XCircle, Mail, Play, Clock, RefreshCw } from 'lucide-react'
-import { getRuns } from '../api/runs'
+import { History, Download, CheckCircle2, AlertTriangle, XCircle, Mail, Play, Clock, RefreshCw, TrendingDown } from 'lucide-react'
+import { getRuns, getTrends } from '../api/runs'
 import { downloadUrl } from '../api/clients'
 import { toast } from '../lib/toast'
 
@@ -18,12 +18,17 @@ function rateOf(s) {
 
 export default function Runs() {
   const [runs, setRuns] = useState([])
+  const [regressions, setRegressions] = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
 
   const refresh = async () => {
     setLoading(true)
-    try { setRuns(await getRuns()) }
+    try {
+      const [r, t] = await Promise.all([getRuns(), getTrends().catch(() => [])])
+      setRuns(r)
+      setRegressions((Array.isArray(t) ? t : []).filter(s => s.regression))
+    }
     catch { toast('Could not load run history.', 'error') }
     finally { setLoading(false) }
   }
@@ -42,6 +47,30 @@ export default function Runs() {
           <RefreshCw size={13} /> Refresh
         </button>
       </div>
+
+      {/* Regression alerts — only shown when a condition's latest rate dropped
+          well below its recent average. */}
+      {regressions.length > 0 && (
+        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingDown size={15} className="text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">
+              {regressions.length} condition{regressions.length !== 1 ? 's' : ''} regressed since their recent average
+            </span>
+          </div>
+          <div className="space-y-1">
+            {regressions.map((s, i) => (
+              <div key={i} className="text-xs text-amber-900/80 flex items-center gap-2">
+                <span className="font-medium">{s.client_name}</span>
+                <span className="text-amber-700">·</span>
+                <span>{s.name}{s.validation_name ? ` (${s.validation_name})` : ''}</span>
+                <span className="text-amber-700">·</span>
+                <span className="tabular-nums">{s.latest_rate}% now vs {s.baseline_rate}% avg</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-slate-400 text-sm">Loading…</div>

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from pydantic import BaseModel as _BaseModel
 
 from app.models import RunConditionRequest, RunAllRequest
-from app.routers.files import load_df
+from app.routers.files import load_df, file_meta
 from app.services import (
     axel_connection_store,
     axel_query_store,
@@ -137,8 +137,16 @@ def run_all(req: RunAllRequest):
     # Shared conditions apply to every client, run before the client's own.
     all_conditions = shared_store.get_all() + client.get("conditions", [])
 
+    is_query = bool(req.axel_source and req.axel_source.get("kind") == "query")
+    axel_name = "SQL/API query" if is_query else ((file_meta(req.file_axel_id) or {}).get("name", "—"))
+    run_info = {
+        "axel_name": axel_name,
+        "axel_sheet": "—" if is_query else req.sheet_axel,
+        "dms_name": (file_meta(req.file_dms_id) or {}).get("name", "—"),
+        "dms_sheet": req.sheet_dms,
+    }
     combined_id, condition_results = run_all_conditions(
-        all_conditions, df_axel, df_dms
+        all_conditions, df_axel, df_dms, run_info
     )
 
     resp = {"combined_result_id": combined_id, "conditions": condition_results,

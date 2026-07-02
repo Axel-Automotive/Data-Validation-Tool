@@ -33,6 +33,18 @@ are not supported (no OCR).
 - **Duplicate-key handling** — duplicate keys are reported (a *Duplicate Keys*
   sheet + counts) instead of silently dropped; Calculation Difference can
   collapse them by keeping the first row or aggregating (sum/avg/max/min).
+- **Aggregate Comparison** — a fifth comparison type: group either side by a key
+  (single or composite) and compare `sum/count/avg/min/max/distinct` with an
+  absolute **and/or %** tolerance (e.g. sum of AXEL detail lines vs a DMS total).
+- **RAG report summary + audit sheet** — the combined report's Summary sheet
+  gets a colour-coded **Health** column (Pass / At-risk / Fail, with icon+label,
+  never colour-only) and a totals row, plus a **Run Info** sheet recording the
+  timestamp, sources, sheets, and row counts.
+- **Unattended-run observability** — scheduled runs emit structured log lines
+  (rows processed, failures, duration) and email an **alert** on failure or when
+  a condition's match rate drops sharply below its recent average. `GET
+  /api/runs/trends` returns per-condition rate history + regression flags, shown
+  as a banner on the Run History page.
 - **Clients & conditions** — save validation rules per client and run them all at once
 - **Shared conditions** — rules that apply to every client, run before each client's
   own conditions (managed via `/api/shared-conditions`)
