@@ -212,6 +212,42 @@ def test_agg_compare_percentage_tolerance():
     assert lax["metrics"]["passed"] == 1
 
 
+def test_custom_rule_percentage_tolerance():
+    # 3 diff on 1000 = 0.3% → passes a 1% band; fails absolute-0.
+    a = pd.DataFrame({"K": ["1"], "V": [1003]})
+    b = pd.DataFrame({"K": ["1"], "V": [1000]})
+    strict = {"key_axel": "K", "checks": [
+        {"axel_col": "V", "dms_col": "V", "mode": "numeric", "op": "eq", "tolerance": 0}]}
+    assert run_custom_rule(a, b, strict)["metrics"]["passed"] == 0
+    pct = {"key_axel": "K", "checks": [
+        {"axel_col": "V", "dms_col": "V", "mode": "numeric", "op": "eq", "tolerance_pct": 1.0}]}
+    assert run_custom_rule(a, b, pct)["metrics"]["passed"] == 1
+
+
+def test_custom_rule_warning_severity_does_not_fail_row():
+    # The value check is an ERROR (passes); the status check is a WARNING (fails).
+    a = pd.DataFrame({"K": ["1"], "V": [100], "S": ["Open"]})
+    b = pd.DataFrame({"K": ["1"], "V": [100], "S": ["Closed"]})
+    cfg = {"key_axel": "K", "checks": [
+        {"axel_col": "V", "dms_col": "V", "mode": "numeric", "op": "eq", "tolerance": 0, "severity": "error"},
+        {"axel_col": "S", "dms_col": "S", "mode": "text", "op": "eq", "severity": "warning"}]}
+    m = run_custom_rule(a, b, cfg)["metrics"]
+    assert m["passed"] == 1        # row still passes (only a warning tripped)
+    assert m["failed"] == 0
+    assert m["warnings"] == 1
+
+
+def test_fuzzy_key_matching_pairs_near_misses():
+    # VINs differ by one char; exact matching misses them, fuzzy pairs them.
+    a = pd.DataFrame({"VIN": ["3VVSX7B21RM066810", "JF2SJAEC7JH616247"], "V": [100, 200]})
+    b = pd.DataFrame({"VIN": ["3VVSX7B21RM066811", "JF2SJAEC7JH616247"], "V": [100, 200]})
+    exact = run_calc_difference(a, b, "AXEL", "DMS", "VIN", "V", "V")
+    assert exact["metrics"]["matched"] == 1        # only the identical VIN
+    fuzzy = run_calc_difference(a, b, "AXEL", "DMS", "VIN", "V", "V",
+                                fuzzy={"enabled": True, "threshold": 0.9})
+    assert fuzzy["metrics"]["matched"] == 2        # near-miss VIN now paired
+
+
 def test_custom_rule_requires_key_and_checks():
     a = pd.DataFrame({"K": ["1"]})
     with pytest.raises(HTTPException):

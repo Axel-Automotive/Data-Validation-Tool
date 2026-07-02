@@ -21,7 +21,9 @@ are not supported (no OCR).
   - **Stacked Comparison** — records matched side‑by‑side on a shared key
   - **Calculation Difference** — numeric delta between value columns
   - **Custom Rule** — a no‑code rule builder (join key + column checks with
-    numeric/text operators and tolerances)
+    numeric/text operators, absolute **and %** tolerances, and per-check
+    **severity** — a failing *Warning* check flags the row without failing it,
+    a failing *Error* check fails it)
 - **Reconciliation breaks surfaced** — Calculation Difference and Custom Rule
   export the **unmatched** keys (present on one side only) as their own
   *Unmatched AXEL* / *Unmatched DMS* sheets, not just matched rows.
@@ -30,6 +32,9 @@ are not supported (no OCR).
 - **Key matching options** — optionally match keys by ignoring leading zeros,
   case, spaces/punctuation, or by parsing dates — so trivially-different keys
   don't show up as false breaks.
+- **Fuzzy key matching** (opt-in) — pair near-miss keys (VINs, names off by a
+  character) above a similarity threshold, for Calculation Difference and
+  Custom Rule.
 - **Duplicate-key handling** — duplicate keys are reported (a *Duplicate Keys*
   sheet + counts) instead of silently dropped; Calculation Difference can
   collapse them by keeping the first row or aggregating (sum/avg/max/min).

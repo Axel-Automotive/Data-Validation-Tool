@@ -1,5 +1,6 @@
 """All Excel comparison logic — ad-hoc and condition-based."""
 from __future__ import annotations
+import difflib
 import io
 import json
 import re
@@ -145,6 +146,38 @@ def _canon_value(s: pd.Series, opts: dict | None) -> pd.Series:
     if opts.get("alnum_only"):
         out = out.str.replace(r"[^A-Za-z0-9]", "", regex=True)
     return out
+
+
+_FUZZY_MAX_PAIRS = 500_000   # skip fuzzy above this A×B size (runtime guard)
+
+
+def _fuzzy_remap(a_keys: set, b_keys: set, threshold: float) -> dict:
+    """Greedily pair each still-unmatched B key with its closest unmatched A key
+    (similarity ≥ threshold), returning {b_key: a_key}. One A key per B key.
+
+    Used for keys that don't align exactly (VINs, names, part numbers). Opt-in,
+    since fuzzy matching can create false pairs."""
+    a_only = [k for k in a_keys if k not in b_keys]
+    b_only = [k for k in b_keys if k not in a_keys]
+    if not a_only or not b_only or len(a_only) * len(b_only) > _FUZZY_MAX_PAIRS:
+        return {}
+    available = set(a_only)
+    remap: dict = {}
+    for bk in b_only:
+        match = difflib.get_close_matches(bk, list(available), n=1, cutoff=threshold)
+        if match:
+            remap[bk] = match[0]
+            available.discard(match[0])   # keep pairing one-to-one
+    return remap
+
+
+def _apply_fuzzy(key_a: pd.Series, key_b: pd.Series, fuzzy: dict | None) -> pd.Series:
+    """If fuzzy is enabled, remap key_b so near-miss keys align with key_a."""
+    if not fuzzy or not fuzzy.get("enabled"):
+        return key_b
+    thr = float(fuzzy.get("threshold") or 0.85)
+    remap = _fuzzy_remap(set(key_a), set(key_b), thr)
+    return key_b.map(lambda k: remap.get(k, k)) if remap else key_b
 
 
 def _composite_key(df: pd.DataFrame, cols: list[str], na="", norm: dict | None = None) -> pd.Series:
@@ -396,6 +429,7 @@ def run_calc_difference(
     key_col_b: str | None = None,
     key_norm: dict | None = None,
     on_duplicate: str = "first",
+    fuzzy: dict | None = None,
 ) -> dict:
     # Key can be a single column or a composite (list of columns). The DMS side
     # mirrors AXEL when its key is blank.
@@ -415,6 +449,7 @@ def run_calc_difference(
                        val_a: pd.to_numeric(df_a[num_col_a], errors="coerce")})
     tb = pd.DataFrame({"KEY": _composite_key(df_b, key_cols_b, norm=key_norm),
                        val_b: pd.to_numeric(df_b[num_col_b], errors="coerce")})
+    tb["KEY"] = _apply_fuzzy(ta["KEY"], tb["KEY"], fuzzy)   # opt-in near-miss key pairing
 
     rows_a, rows_b = len(ta), len(tb)
     # Surface duplicate keys BEFORE collapsing them — an inner merge would
@@ -562,6 +597,7 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     right = df_b[[_find_col(df_b, c) for c in dms_cols]].copy()
     right.columns = [f"{c} [{name_b}]" for c in dms_cols]
     right.insert(0, "__KEY__", _composite_key(df_b, key_cols_b, norm=key_norm).values)
+    right["__KEY__"] = _apply_fuzzy(left["__KEY__"], right["__KEY__"], config.get("fuzzy"))
 
     rows_a, rows_b = len(left), len(right)
     # Surface duplicate keys before collapsing them (see calc_diff).
@@ -582,22 +618,32 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     unmatched_b = right[~right["__KEY__"].isin(a_keys)].rename(columns={"__KEY__": key_b})
 
     merged = left.merge(right, on="__KEY__", how="inner")
-    pass_all = pd.Series(True, index=merged.index)
-    check_meta: list[tuple[str, str, pd.Series]] = []   # (col_a, col_b, fail_mask)
+    error_pass  = pd.Series(True, index=merged.index)    # ANDs only ERROR checks
+    warn_any    = pd.Series(False, index=merged.index)   # any WARNING check failed
+    # (col_a, col_b, fail_mask, severity) — severity drives red vs amber highlight
+    check_meta: list[tuple[str, str, pd.Series, str]] = []
 
     for i, chk in enumerate(checks, start=1):
         col_a = f'{chk["axel_col"]} [{name_a}]'
         col_b = f'{chk["dms_col"]} [{name_b}]'
         op    = chk.get("op", "eq")
         mode  = chk.get("mode", "numeric")
+        severity = "warning" if (chk.get("severity") or "error").lower() == "warning" else "error"
 
         if mode == "numeric":
             if op not in _NUMERIC_OPS:
                 raise HTTPException(400, f"Unknown numeric operator: {op}")
-            tol = float(chk.get("tolerance") or 0)
+            tol     = float(chk.get("tolerance") or 0)
+            tol_pct = float(chk.get("tolerance_pct") or 0)
             va  = pd.to_numeric(merged[col_a], errors="coerce")
             vb  = pd.to_numeric(merged[col_b], errors="coerce")
-            res = _NUMERIC_OPS[op](va, vb, tol).fillna(False)
+            # Effective tolerance: the larger of the absolute band and the
+            # percentage-of-DMS band (Oracle/DQOps pattern). A Series so it
+            # applies row-by-row for the % case.
+            eff_tol = pd.Series(tol, index=merged.index)
+            if tol_pct:
+                eff_tol = pd.concat([eff_tol, vb.abs() * (tol_pct / 100.0)], axis=1).max(axis=1)
+            res = _NUMERIC_OPS[op](va, vb, eff_tol).fillna(False)
             merged[f"Δ{i} ({chk['axel_col']}−{chk['dms_col']})"] = va - vb
             label = _NUMERIC_LABEL.get(op, op)
         else:
@@ -606,19 +652,26 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
             res = _text_op(op, va, vb)
             label = _TEXT_LABEL.get(op, op)
 
+        # A failing warning check shows "Warn" and does NOT fail the row's Result.
+        fail_word = "Warn" if severity == "warning" else "Fail"
         merged[f"Check {i}: {chk['axel_col']} {label} {chk['dms_col']}"] = \
-            res.map({True: "Pass", False: "Fail"})
-        check_meta.append((col_a, col_b, ~res))
-        pass_all &= res
+            res.map({True: "Pass", False: fail_word})
+        check_meta.append((col_a, col_b, ~res, severity))
+        if severity == "warning":
+            warn_any |= ~res
+        else:
+            error_pass &= res
 
-    merged["Result"] = pass_all.map({True: "Pass", False: "Fail"})
+    merged["Result"] = error_pass.map({True: "Pass", False: "Fail"})
+    # Flag rows that passed all error checks but tripped a warning.
+    merged.loc[error_pass & warn_any, "Result"] = "Pass (warn)"
 
     # Readable pointer to the offending columns per failing row — survives into
     # the combined "run all" report (which can't carry cell colouring).
     if check_meta:
         def _fail_cols(pos: int) -> str:
             names: list[str] = []
-            for col_a, col_b, fail_mask in check_meta:
+            for col_a, col_b, fail_mask, _sev in check_meta:
                 if bool(fail_mask.iloc[pos]):
                     names += [col_a, col_b]
             return ", ".join(names)
@@ -626,10 +679,11 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
 
     merged = merged.rename(columns={"__KEY__": key_a})
 
-    matched = len(merged)
-    passed  = int(pass_all.sum())
-    failed  = matched - passed
-    failures = merged[pass_all.values == False] if matched else merged  # noqa: E712
+    matched   = len(merged)
+    passed    = int(error_pass.sum())
+    failed    = matched - passed
+    warnings  = int((error_pass & warn_any).sum())
+    failures = merged[error_pass.values == False] if matched else merged  # noqa: E712
 
     sh_unm_a = _sanitize_sheet(f"Unmatched {name_a}")
     sh_unm_b = _sanitize_sheet(f"Unmatched {name_b}")
@@ -655,22 +709,25 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     # straight to the offending column+row.
     wb  = load_workbook(buf)
     ws  = wb["Rule_Results"]
-    RED = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
+    RED   = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
+    AMBER = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
     hdr = {cell.value: i + 1 for i, cell in enumerate(ws[1])}
     result_idx = hdr.get("Result")
 
     for r in range(2, ws.max_row + 1):
         pos   = r - 2                                    # 0-based row in `merged`
-        failed_here = False
-        for col_a, col_b, fail_mask in check_meta:
+        err_here = warn_here = False
+        for col_a, col_b, fail_mask, severity in check_meta:
             if bool(fail_mask.iloc[pos]):
-                failed_here = True
+                fill = AMBER if severity == "warning" else RED
+                err_here  = err_here  or severity != "warning"
+                warn_here = warn_here or severity == "warning"
                 for cname in (col_a, col_b):
                     ci = hdr.get(cname)
                     if ci:
-                        ws.cell(row=r, column=ci).fill = RED
-        if failed_here and result_idx:
-            ws.cell(row=r, column=result_idx).fill = RED
+                        ws.cell(row=r, column=ci).fill = fill
+        if result_idx and (err_here or warn_here):
+            ws.cell(row=r, column=result_idx).fill = RED if err_here else AMBER
 
     ws.freeze_panes    = "A2"
     ws.auto_filter.ref = ws.dimensions
@@ -681,6 +738,7 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
         "metrics": {
             "rows_a": rows_a, "rows_b": rows_b,
             "matched": matched, "passed": passed, "failed": failed,
+            "warnings": warnings,
             "pass_rate": round(passed / max(matched, 1) * 100, 1),
             "checks": len(checks),
             "unmatched_a": distinct_a - matched, "unmatched_b": distinct_b - matched,
@@ -851,6 +909,7 @@ def run_condition(df_axel: pd.DataFrame, df_dms: pd.DataFrame, ctype: str, confi
             config.get("key_dms"),
             config.get("key_norm"),
             config.get("on_duplicate", "first"),
+            config.get("fuzzy"),
         )
 
     if ctype == "custom_rule":

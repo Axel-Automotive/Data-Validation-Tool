@@ -104,6 +104,9 @@ rows each rule affected so it's auditable.
 
 ---
 
+> **Progress (2026-07-02):** Tier 2 COMPLETE — T2.1 (%/severity tolerances) and
+> T2.2 (fuzzy key matching) shipped with tests.
+
 ## Tier 2 — Tolerances & matching depth
 
 ### T2.1 — Percentage + severity tolerances 🟢🟡  *(old P4; research-backed)*

@@ -131,6 +131,31 @@ function KeyNormOptions({ value, onChange }) {
   )
 }
 
+// Optional fuzzy key matching — pairs near-miss keys (VINs, names). Opt-in.
+function FuzzyOptions({ value, onChange }) {
+  const v = value || {}
+  return (
+    <div>
+      <Label hint="Pair keys that nearly match (e.g. VINs off by a character) — use with care">Fuzzy key matching (optional)</Label>
+      <div className="flex items-center gap-4">
+        <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" checked={!!v.enabled} onChange={e => onChange({ ...v, enabled: e.target.checked })}
+            className="w-3.5 h-3.5 rounded border-slate-300 accent-brand-600 cursor-pointer" />
+          Enable
+        </label>
+        {v.enabled && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-2xs text-slate-400">Similarity ≥</span>
+            <input type="number" step="0.05" min="0" max="1" value={v.threshold ?? 0.85}
+              onChange={e => onChange({ ...v, threshold: e.target.value })}
+              className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Type-specific config forms ────────────────────────────────────────────────
 
 function SheetDiffForm({ config, onChange, columnsAxel, columnsDms }) {
@@ -245,6 +270,7 @@ function CalcDiffForm({ config, onChange, columnsAxel, columnsDms }) {
             ]} />
         </div>
       </div>
+      <FuzzyOptions value={config.fuzzy} onChange={v => set('fuzzy', v)} />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label hint="Numeric column to compare in AXEL">Value Column — AXEL</Label>
@@ -304,6 +330,7 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
         </div>
       </div>
       <KeyNormOptions value={config.key_norm} onChange={v => set('key_norm', v)} />
+      <FuzzyOptions value={config.fuzzy} onChange={v => set('fuzzy', v)} />
 
       <div className="border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between mb-3">
@@ -342,7 +369,7 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
                     <ColInput value={c.dms_col} onChange={v => setCheck(i, 'dms_col', v)} options={columnsDms} placeholder="DMS column" />
                   </div>
                 </div>
-                <div className={`grid gap-2 ${c.mode === 'numeric' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <div>
                     <p className="text-2xs text-slate-400 mb-1">Type</p>
                     <Select value={c.mode} onChange={v => setCheck(i, 'mode', v)}
@@ -353,14 +380,29 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
                     <Select value={c.op} onChange={v => setCheck(i, 'op', v)}
                       options={c.mode === 'numeric' ? NUMERIC_OPS : TEXT_OPS} />
                   </div>
+                </div>
+                <div className={`grid gap-2 ${c.mode === 'numeric' ? 'grid-cols-3' : 'grid-cols-1'}`}>
                   {c.mode === 'numeric' && (
-                    <div>
-                      <p className="text-2xs text-slate-400 mb-1">Tolerance</p>
-                      <input type="number" step="any" value={c.tolerance ?? 0}
-                        onChange={e => setCheck(i, 'tolerance', e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
-                    </div>
+                    <>
+                      <div>
+                        <p className="text-2xs text-slate-400 mb-1">Tolerance</p>
+                        <input type="number" step="any" value={c.tolerance ?? 0}
+                          onChange={e => setCheck(i, 'tolerance', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+                      </div>
+                      <div>
+                        <p className="text-2xs text-slate-400 mb-1">Tolerance %</p>
+                        <input type="number" step="any" value={c.tolerance_pct ?? 0}
+                          onChange={e => setCheck(i, 'tolerance_pct', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+                      </div>
+                    </>
                   )}
+                  <div>
+                    <p className="text-2xs text-slate-400 mb-1">Severity</p>
+                    <Select value={c.severity || 'error'} onChange={v => setCheck(i, 'severity', v)}
+                      options={[{ id: 'error', label: 'Error (fails row)' }, { id: 'warning', label: 'Warning' }]} />
+                  </div>
                 </div>
               </div>
             ))}
