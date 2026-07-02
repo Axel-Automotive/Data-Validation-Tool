@@ -144,7 +144,10 @@ Open http://localhost:8000. The `-v` mount persists clients, schedules, runs,
 files, and reports across restarts.
 
 > The scheduler runs inside the backend process, so the container must stay up
-> for schedules to fire. Schedule times use the container's local timezone.
+> for schedules to fire. Schedule times are interpreted in the container's local
+> timezone by default; set `SCHEDULER_TIMEZONE` to an IANA zone name (e.g.
+> `America/New_York`) to run schedules in that zone instead — recommended for
+> containers, whose local time is otherwise UTC.
 
 ## Azure App Service deployment
 
@@ -167,6 +170,7 @@ ENABLE_ORYX_BUILD=false
 PORT=8000
 WEBSITES_PORT=8000
 PYTHONPATH=/home/site/wwwroot/python_packages/lib/site-packages:/home/site/wwwroot/backend
+SCHEDULER_TIMEZONE=America/New_York
 SMTP_HOST=smtp.office365.com
 SMTP_PORT=587
 SMTP_USER=you@axelautomotive.com
@@ -175,8 +179,10 @@ SMTP_FROM=
 SMTP_FROM_NAME=AXEL Validator
 ```
 
-Only the SMTP settings are app-specific secrets; omit them if email is not being
-used yet. Set the App Service startup command to:
+`SCHEDULER_TIMEZONE` (optional) sets the zone schedule times are interpreted in;
+without it, Azure runs schedules in UTC. Only the SMTP settings are app-specific
+secrets; omit them if email is not being used yet. Set the App Service startup
+command to:
 
 ```bash
 python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Clock, Plus, Trash2, Edit2, Play, X, Save, CalendarClock,
   CheckCircle2, AlertTriangle, ToggleLeft, ToggleRight,
@@ -57,9 +57,19 @@ function ScheduleForm({ initial, clients, files, onSave, onCancel }) {
   const [queryId,     setQueryId]     = useState(initial?.axel_source?.query_id || '')
   const [queryParams, setQueryParams] = useState(initial?.axel_source?.params || {})
 
+  // Load the selected client's queries. On a client CHANGE (not the initial
+  // mount) clear the query selection — a query id belongs to one client, so
+  // keeping it would silently submit another client's query id.
+  const firstQueryLoad = useRef(true)
   useEffect(() => {
+    if (!firstQueryLoad.current) { setQueryId(''); setQueryParams({}) }
+    firstQueryLoad.current = false
     if (!clientId) { setQueries([]); return }
-    getAxelQueries(clientId).then(q => setQueries(Array.isArray(q) ? q : [])).catch(() => setQueries([]))
+    let cancelled = false
+    getAxelQueries(clientId)
+      .then(q => { if (!cancelled) setQueries(Array.isArray(q) ? q : []) })
+      .catch(() => { if (!cancelled) setQueries([]) })
+    return () => { cancelled = true }
   }, [clientId])
 
   const axelFile = files.find(f => f.id === axelId)

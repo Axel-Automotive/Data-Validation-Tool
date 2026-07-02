@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { History, Download, CheckCircle2, AlertTriangle, XCircle, Mail, Play, Clock, RefreshCw } from 'lucide-react'
 import { getRuns } from '../api/runs'
 import { downloadUrl } from '../api/clients'
@@ -69,8 +69,8 @@ export default function Runs() {
                 const Icon = meta.Icon
                 const open = expanded === r.id
                 return (
-                  <>
-                    <tr key={r.id}
+                  <Fragment key={r.id}>
+                    <tr
                       onClick={() => setExpanded(open ? null : r.id)}
                       className="border-b border-slate-50 last:border-transparent hover:bg-slate-50/60 transition-colors cursor-pointer">
                       <td className="px-5 py-3.5 text-slate-600 tabular-nums whitespace-nowrap">{r.ts}</td>
@@ -100,7 +100,7 @@ export default function Runs() {
                       </td>
                     </tr>
                     {open && r.summary?.length > 0 && (
-                      <tr key={r.id + '-d'} className="bg-slate-50/50">
+                      <tr className="bg-slate-50/50">
                         <td colSpan={5} className="px-5 py-3">
                           <div className="space-y-1.5">
                             {r.summary.map((s, i) => (
@@ -118,7 +118,7 @@ export default function Runs() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>

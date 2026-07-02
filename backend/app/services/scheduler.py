@@ -1,5 +1,6 @@
 """Background scheduler that runs validations automatically and emails reports."""
 from __future__ import annotations
+import os
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -13,12 +14,18 @@ _scheduler: BackgroundScheduler | None = None
 
 VALID_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
+# Schedules store hour/minute as the user's local wall-clock time. In a container
+# the process TZ is UTC, so an 08:00 schedule would fire at 08:00 UTC. Set
+# SCHEDULER_TIMEZONE (IANA name, e.g. "America/New_York") to fire in that zone;
+# unset → the server's local time (unchanged legacy behaviour).
+SCHEDULER_TIMEZONE = os.getenv("SCHEDULER_TIMEZONE") or None
+
 
 def start() -> None:
     global _scheduler
     if _scheduler is not None:
         return
-    _scheduler = BackgroundScheduler(daemon=True)
+    _scheduler = BackgroundScheduler(daemon=True, timezone=SCHEDULER_TIMEZONE)
     _scheduler.start()
     for s in schedule_store.get_all():
         if s.get("enabled"):
@@ -34,10 +41,14 @@ def shutdown() -> None:
 
 def _add_job(s: dict) -> None:
     days = [d for d in s.get("days", []) if d in VALID_DAYS] or VALID_DAYS
+    # Pass the timezone to the trigger itself: CronTrigger otherwise defaults to
+    # the local machine zone at construction, which add_job does NOT override
+    # with the scheduler's timezone. None → local time (unchanged legacy default).
     trigger = CronTrigger(
         day_of_week=",".join(days),
         hour=int(s.get("hour", 8)),
         minute=int(s.get("minute", 0)),
+        timezone=SCHEDULER_TIMEZONE,
     )
     _scheduler.add_job(
         run_schedule, trigger, id=s["id"], args=[s["id"]],

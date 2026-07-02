@@ -46,6 +46,16 @@ def test_sheet_diff_unequal_columns_raises_400():
     assert exc.value.status_code == 400
 
 
+def test_sheet_diff_column_named_merge_does_not_crash():
+    # A compared column literally named "_merge" collided with the pandas
+    # merge indicator and raised a 500 — must now work.
+    a = pd.DataFrame({"_merge": ["1", "2", "3"]})
+    b = pd.DataFrame({"_merge": ["1", "2", "4"]})
+    r = run_sheet_difference(a, b, ["_merge"], ["_merge"])
+    assert r["metrics"]["matched"] == 2
+    assert r["metrics"]["only_in_a"] == 1
+
+
 # ── Calc difference ─────────────────────────────────────────────────────────────
 
 def test_calc_diff_no_fanout_on_duplicate_keys():
@@ -88,6 +98,20 @@ def test_custom_rule_requires_key_and_checks():
     a = pd.DataFrame({"K": ["1"]})
     with pytest.raises(HTTPException):
         run_custom_rule(a, a, {"key_axel": "", "checks": []})
+
+
+def test_custom_rule_duplicate_keys_do_not_inflate_unmatched():
+    # AXEL has key "1" twice; both sides share keys 1 and 2. After dedup there
+    # are 2 distinct matched keys and 0 unmatched — the raw row count must not
+    # leak into unmatched_a as a phantom unmatched row.
+    a = pd.DataFrame({"K": ["1", "1", "2"], "V": [100, 100, 200]})
+    b = pd.DataFrame({"K": ["1", "2"],      "V": [100, 200]})
+    cfg = {"key_axel": "K", "checks": [
+        {"axel_col": "V", "dms_col": "V", "mode": "numeric", "op": "eq", "tolerance": 0}]}
+    m = run_custom_rule(a, b, cfg)["metrics"]
+    assert m["matched"] == 2
+    assert m["unmatched_a"] == 0
+    assert m["unmatched_b"] == 0
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────────

@@ -5,7 +5,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from app.database import session_scope
-from app.models.tables import Client, Condition, client_dict, condition_dict
+from app.models.tables import (
+    AxelConnection,
+    AxelQuery,
+    Client,
+    Condition,
+    client_dict,
+    condition_dict,
+)
 
 
 # ── Clients ───────────────────────────────────────────────────────────────────
@@ -58,6 +65,12 @@ def delete_client(client_id: str) -> bool:
         c = db.get(Client, client_id)
         if not c:
             return False
+        # AxelQuery/AxelConnection have FKs to clients but no ORM cascade, so
+        # remove them explicitly. Without this, deleting a client orphans its
+        # encrypted credentials on SQLite and raises an IntegrityError on a
+        # FK-enforcing database (Postgres/MSSQL).
+        db.query(AxelQuery).filter(AxelQuery.client_id == client_id).delete()
+        db.query(AxelConnection).filter(AxelConnection.client_id == client_id).delete()
         db.delete(c)
         return True
 

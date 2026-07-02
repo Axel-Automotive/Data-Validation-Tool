@@ -12,6 +12,8 @@ from app.services import (
     axel_source,
     client_store,
     email_service,
+    scheduler,
+    schedule_store,
 )
 
 router = APIRouter()
@@ -46,8 +48,14 @@ def update_client(client_id: str, body: ClientCreateRequest):
 
 @router.delete("/{client_id}")
 def delete_client(client_id: str):
+    # Capture the client's schedule ids first — deleting the client cascades
+    # its Schedule rows away, but the live APScheduler jobs must be removed too.
+    sched_ids = [s["id"] for s in schedule_store.get_all() if s.get("client_id") == client_id]
     if not client_store.delete_client(client_id):
         raise HTTPException(404, "Client not found")
+    axel_source.invalidate(client_id)   # drop any cached DB engine for this client
+    for sid in sched_ids:
+        scheduler.remove(sid)
     return {"ok": True}
 
 

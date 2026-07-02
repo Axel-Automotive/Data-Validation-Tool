@@ -20,8 +20,16 @@ FILES_DIR = Path(__file__).parent.parent.parent / "data" / "files"
 CSV_SHEET = "CSV"
 
 
+def _safe_id(file_id: str) -> str:
+    """Reject anything that isn't a bare id token, so a crafted file_id like
+    '../../etc/passwd' can't traverse out of FILES_DIR."""
+    if not re.fullmatch(r"[A-Za-z0-9\-]+", file_id or ""):
+        raise HTTPException(404, "File not found — please re-upload.")
+    return file_id
+
+
 def _meta_path(file_id: str) -> Path:
-    return FILES_DIR / f"{file_id}.json"
+    return FILES_DIR / f"{_safe_id(file_id)}.json"
 
 
 def _read_meta(file_id: str) -> dict | None:
@@ -39,7 +47,7 @@ def _data_path(file_id: str, ext: str | None = None) -> Path:
     # in their meta) still resolve to <id>.xlsx.
     if ext is None:
         ext = (_read_meta(file_id) or {}).get("ext", "xlsx")
-    return FILES_DIR / f"{file_id}.{ext}"
+    return FILES_DIR / f"{_safe_id(file_id)}.{ext}"
 
 
 def _read_csv_bytes(content: bytes) -> pd.DataFrame:
@@ -333,6 +341,8 @@ def cleanup_old_files(max_age_days: int = 30) -> int:
     """
     if not FILES_DIR.exists():
         return 0
+    # If we can't read the schedules we can't know which files are pinned —
+    # abort rather than risk deleting a file an enabled schedule depends on.
     try:
         from app.services import schedule_store
         pinned = set()
@@ -340,7 +350,7 @@ def cleanup_old_files(max_age_days: int = 30) -> int:
             pinned.add(s.get("file_axel_id"))
             pinned.add(s.get("file_dms_id"))
     except Exception:
-        pinned = set()
+        return 0
 
     cutoff = time.time() - max_age_days * 86400
     removed = 0

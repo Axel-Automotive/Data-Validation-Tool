@@ -5,6 +5,7 @@ import {
   Users, CalendarClock, History, Library,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
+import { toast } from '../../lib/toast'
 import logoAxelOne from '../../assets/logo-axelone.png'
 
 const NAV = [
@@ -43,7 +44,8 @@ export default function Sidebar({
       await onClientsChange()
       onSelectClient(c)
       setNewName(''); setAdding(false)
-    } finally { setSaving(false) }
+    } catch { toast('Failed to create client', 'error') }
+    finally { setSaving(false) }
   }
 
   return (

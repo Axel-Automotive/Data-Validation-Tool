@@ -177,9 +177,14 @@ def run_sheet_difference(
     sel_a = sel_a.apply(_norm_series).drop_duplicates()
     sel_b = sel_b.apply(_norm_series).drop_duplicates()
 
-    merged   = sel_a.merge(sel_b, how="outer", indicator=True)
-    not_in_b = merged[merged["_merge"] == "left_only"].drop("_merge", axis=1)
-    not_in_a = merged[merged["_merge"] == "right_only"].drop("_merge", axis=1)
+    # Use an indicator column name that can't collide with a compared column
+    # (pandas raises if we ask for indicator=True and "_merge" already exists).
+    ind = "_merge"
+    while ind in sel_a.columns:
+        ind += "_"
+    merged   = sel_a.merge(sel_b, how="outer", indicator=ind)
+    not_in_b = merged[merged[ind] == "left_only"].drop(ind, axis=1)
+    not_in_a = merged[merged[ind] == "right_only"].drop(ind, axis=1)
 
     total_a = len(sel_a)
     total_b = len(sel_b)
@@ -459,6 +464,10 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     # Keep first occurrence per key so duplicate keys don't fan out.
     left  = left.drop_duplicates("__KEY__")
     right = right.drop_duplicates("__KEY__")
+    # Distinct-key counts drive the unmatched metrics: matched is the number of
+    # distinct joined keys, so subtracting it from the raw row count (which may
+    # include duplicate keys) would report phantom unmatched rows.
+    distinct_a, distinct_b = len(left), len(right)
 
     merged = left.merge(right, on="__KEY__", how="inner")
     pass_all = pd.Series(True, index=merged.index)
@@ -549,7 +558,7 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
             "matched": matched, "passed": passed, "failed": failed,
             "pass_rate": round(passed / max(matched, 1) * 100, 1),
             "checks": len(checks),
-            "unmatched_a": rows_a - matched, "unmatched_b": rows_b - matched,
+            "unmatched_a": distinct_a - matched, "unmatched_b": distinct_b - matched,
         },
         "preview": {
             "results": {"data": _to_records(merged), "total": matched,

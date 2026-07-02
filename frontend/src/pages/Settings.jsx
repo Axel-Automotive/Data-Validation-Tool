@@ -37,11 +37,17 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
   const [axelQueries, setAxelQueries] = useState([])
 
   // Load this client's saved AXEL queries so the column-source bar can offer
-  // them, and reset the column selection when switching clients.
+  // them, and reset the column selection + any open editors when switching
+  // clients (so a condition drafted for A can't be saved under B).
   useEffect(() => {
     fs.clear()
+    setEditingCondition(null); setConfirmDelete(null); setConfirmClient(null)
     if (!selectedClient) { setAxelQueries([]); return }
-    getAxelQueries(selectedClient.id).then(q => setAxelQueries(Array.isArray(q) ? q : [])).catch(() => setAxelQueries([]))
+    let cancelled = false
+    getAxelQueries(selectedClient.id)
+      .then(q => { if (!cancelled) setAxelQueries(Array.isArray(q) ? q : []) })
+      .catch(() => { if (!cancelled) setAxelQueries([]) })
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClient?.id])
   const [editingClient,    setEditingClient]    = useState(null)
@@ -83,8 +89,9 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
   const handleDeleteClient = async (id) => {
     try {
       await deleteClient(id)
+      // onClientsChange() (App.refreshClients) reselects a fresh client object
+      // from the refreshed list; don't override it here with a stale snapshot.
       await onClientsChange()
-      onSelectClient(clients.find(c => c.id !== id) || null)
       setConfirmClient(null)
       toast('Client deleted', 'success')
     } catch { toast('Failed to delete client', 'error') }
@@ -231,8 +238,10 @@ export default function Settings({ clients, selectedClient, onSelectClient, onCl
               clientName={selectedClient.name}
               onSave={handleSaveEmail} />
 
-            {/* Per-client AXEL data source — DB connection + saved report queries */}
-            <AxelSourceManager clientId={selectedClient.id} />
+            {/* Per-client AXEL data source — DB connection + saved report queries.
+                Keyed by client so its connection form / query editor fully reset
+                on a client switch (no carrying A's credentials into B's form). */}
+            <AxelSourceManager key={selectedClient.id} clientId={selectedClient.id} />
 
             {/* Load columns the conditions below will pick from — choose the AXEL
                 side (a saved query OR an uploaded sheet) and a DMS file. */}

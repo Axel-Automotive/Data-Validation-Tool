@@ -6,6 +6,8 @@ masks for API responses.
 """
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from app.database import session_scope
 from app.models.tables import AxelConnection
 from app.services import crypto_util
@@ -34,7 +36,16 @@ def get(client_id: str) -> dict | None:
                 try:
                     cfg[clear] = crypto_util.decrypt(raw[enc])
                 except Exception:
-                    cfg[clear] = ""
+                    # A decrypt failure means the encryption key changed (e.g. the
+                    # data/.secret_key file was regenerated on redeploy). Surface it
+                    # clearly instead of silently connecting with a blank password
+                    # and failing later with a misleading "login failed".
+                    raise HTTPException(
+                        400,
+                        "Stored credentials can't be decrypted — the encryption key has "
+                        "changed. Re-enter this client's connection secrets in Settings "
+                        "→ AXEL Data Source.",
+                    )
         return cfg
 
 

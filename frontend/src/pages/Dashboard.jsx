@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail } from 'lucide-react'
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
 import { listFiles } from '../api/schedules'
@@ -37,6 +37,9 @@ export default function Dashboard({ selectedClient, onNavigate }) {
   // Remember the files last used for each client, and restore them on select.
   useEffect(() => {
     if (!selectedClient) return
+    // Switching client: drop the previous client's run results/report/errors so
+    // they can't be mistaken for (or downloaded as) the new client's.
+    setRunResults(null); setCombinedId(null); setError(null); setSingleRunning({})
     const saved = localStorage.getItem(lastFilesKey(selectedClient.id))
     fs.clear()
     if (!saved) return
@@ -57,7 +60,16 @@ export default function Dashboard({ selectedClient, onNavigate }) {
   }, [selectedClient?.id])
 
   // Persist the current complete selection for this client.
+  // On a client switch the file state still holds the PREVIOUS client's
+  // selection for one commit (the restore effect's fs.clear() hasn't flushed
+  // yet). Skip that first run so we never write client A's files under the key
+  // of client B.
+  const persistedClientRef = useRef(selectedClient?.id)
   useEffect(() => {
+    if (persistedClientRef.current !== selectedClient?.id) {
+      persistedClientRef.current = selectedClient?.id
+      return
+    }
     if (selectedClient && fileAxel && fileDms && sheetAxel && sheetDms) {
       localStorage.setItem(lastFilesKey(selectedClient.id), JSON.stringify({
         axelId: fileAxel.id, sheetAxel, dmsId: fileDms.id, sheetDms,

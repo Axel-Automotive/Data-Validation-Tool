@@ -41,7 +41,10 @@ class Client(Base):
         cascade="all, delete-orphan", order_by="Condition.position",
     )
     schedules = relationship("Schedule", back_populates="client", cascade="all, delete-orphan")
-    runs = relationship("Run", back_populates="client", cascade="all, delete-orphan")
+    # Runs are an audit log and must survive client deletion: on delete SQLAlchemy
+    # nullifies Run.client_id (the row keeps its denormalized client_name). No
+    # delete-orphan here, so history is preserved on both SQLite and Postgres.
+    runs = relationship("Run", back_populates="client")
 
 
 class Condition(Base):

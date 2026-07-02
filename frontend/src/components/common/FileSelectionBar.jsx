@@ -12,7 +12,7 @@ function FileSlot({ label, fileInfo, onUploaded }) {
     if (!file) return
     setLoading(true); setErr(null)
     try { onUploaded(await uploadFile(file)) }
-    catch { setErr('Upload failed') }
+    catch (e) { setErr(e.response?.data?.detail || 'Upload failed') }
     finally { setLoading(false) }
   }
 
