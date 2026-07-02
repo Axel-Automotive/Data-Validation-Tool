@@ -19,6 +19,12 @@ def list_breaks(client_id: str | None = None, status: str | None = None,
                                include_cleared=include_cleared)
 
 
+@router.get("/diff")
+def run_diff(client_id: str):
+    """Run-to-run diff for a client's latest run: new vs cleared breaks."""
+    return break_store.run_diff(client_id)
+
+
 @router.patch("/{break_id}")
 def update_break(break_id: str, body: BreakUpdate):
     updated = break_store.update(break_id, body.model_dump(exclude_none=True))

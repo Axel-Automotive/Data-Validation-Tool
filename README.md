@@ -55,7 +55,8 @@ are not supported (no OCR).
   open/acknowledged/resolved, comments, and an assignee). Recurring breaks carry
   forward; breaks that no longer appear clear automatically; a resolved break
   that recurs reopens. Managed on the **Breaks** page and via `/api/breaks`;
-  each run reports new/cleared/open counts.
+  each run reports new/cleared/open counts, and `/api/breaks/diff` powers a
+  "since last run: N new / M cleared" summary.
 - **Clients & conditions** — save validation rules per client and run them all at once
 - **Shared conditions** — rules that apply to every client, run before each client's
   own conditions (managed via `/api/shared-conditions`)

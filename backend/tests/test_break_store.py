@@ -63,6 +63,29 @@ def test_resolved_break_reopens_when_it_recurs():
     assert reopened[0]["comment"] == "duplicate entry"  # comment preserved
 
 
+def test_run_diff_reports_new_and_cleared(monkeypatch):
+    from app.services import break_store, runs_store
+    # Run 1 introduces A and B under run id "run1".
+    monkeypatch.setattr(runs_store, "get_all",
+                        lambda: [{"id": "run1", "client_id": "c1", "ts": "t1"}])
+    break_store.sync("c1", "run1", [_brk("A"), _brk("B")], [("Deals", "", "calc_diff")])
+    d = break_store.run_diff("c1")
+    assert d["run_id"] == "run1"
+    assert {b["key_label"] for b in d["new"]} == {"A", "B"}
+    assert d["cleared"] == [] and d["still_open"] == 2
+
+    # Run 2 (id "run2") clears B and adds C.
+    monkeypatch.setattr(runs_store, "get_all",
+                        lambda: [{"id": "run2", "client_id": "c1", "ts": "t2"},
+                                 {"id": "run1", "client_id": "c1", "ts": "t1"}])
+    break_store.sync("c1", "run2", [_brk("A"), _brk("C")], [("Deals", "", "calc_diff")])
+    d = break_store.run_diff("c1")
+    assert d["run_id"] == "run2"
+    assert {b["key_label"] for b in d["new"]} == {"C"}        # only C is new in run2
+    assert {b["key_label"] for b in d["cleared"]} == {"B"}    # B cleared in run2
+    assert d["still_open"] == 2                               # A and C
+
+
 def test_clearing_scoped_to_conditions_that_ran():
     from app.services import break_store
     # Two conditions each have a break.

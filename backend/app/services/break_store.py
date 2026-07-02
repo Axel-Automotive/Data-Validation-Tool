@@ -63,7 +63,8 @@ def sync(client_id: str, run_id: str | None, breaks: list[dict],
                     validation_name=b.get("validation_name", ""),
                     type=b.get("type", ""), break_type=b.get("break_type", ""),
                     key_label=b.get("key_label", ""), detail=b.get("detail", {}),
-                    status="open", first_seen=now, last_seen=now, last_run_id=run_id,
+                    status="open", first_seen=now, last_seen=now,
+                    first_run_id=run_id, last_run_id=run_id,
                 ))
                 new_count += 1
 
@@ -114,6 +115,24 @@ def get_all(client_id: str | None = None, status: str | None = None,
             q = q.filter(Break.status != "resolved")   # default: actionable only
         q = q.order_by(Break.status.asc(), Break.first_seen.desc())
         return [break_dict(b) for b in q.all()]
+
+
+def run_diff(client_id: str) -> dict:
+    """What changed in the client's most recent run: breaks first surfaced then
+    (new) and breaks cleared then (resolved-in-data). Also the still-open total."""
+    from app.services import runs_store
+    runs = [r for r in runs_store.get_all() if r.get("client_id") == client_id]
+    if not runs:
+        return {"run_id": None, "ran_at": None, "new": [], "cleared": [], "still_open": 0}
+    latest = runs[0]                      # get_all is newest-first
+    rid = latest["id"]
+    with session_scope() as db:
+        rows = db.query(Break).filter(Break.client_id == client_id).all()
+        new = [break_dict(b) for b in rows if b.first_run_id == rid and not b.cleared]
+        cleared = [break_dict(b) for b in rows if b.cleared and b.last_run_id == rid]
+        still_open = sum(1 for b in rows if not b.cleared and b.status != "resolved")
+    return {"run_id": rid, "ran_at": latest.get("ts"),
+            "new": new, "cleared": cleared, "still_open": still_open}
 
 
 def update(break_id: str, fields: dict) -> dict | None:

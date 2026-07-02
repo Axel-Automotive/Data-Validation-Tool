@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Users, RefreshCw, Check, Clock } from 'lucide-react'
-import { getBreaks, updateBreak } from '../api/breaks'
+import { AlertTriangle, Users, RefreshCw, Check, Clock, Plus, CheckCircle2 } from 'lucide-react'
+import { getBreaks, updateBreak, getBreakDiff } from '../api/breaks'
 import { toast } from '../lib/toast'
 
 const BREAK_META = {
@@ -60,12 +60,20 @@ function BreakRow({ brk, onChange }) {
 
 export default function Breaks({ selectedClient }) {
   const [breaks, setBreaks] = useState([])
+  const [diff, setDiff] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const refresh = async () => {
-    if (!selectedClient) { setBreaks([]); setLoading(false); return }
+    if (!selectedClient) { setBreaks([]); setDiff(null); setLoading(false); return }
     setLoading(true)
-    try { setBreaks(await getBreaks(selectedClient.id)) }
+    try {
+      const [b, d] = await Promise.all([
+        getBreaks(selectedClient.id),
+        getBreakDiff(selectedClient.id).catch(() => null),
+      ])
+      setBreaks(b)
+      setDiff(d)
+    }
     catch { toast('Could not load breaks.', 'error') }
     finally { setLoading(false) }
   }
@@ -104,6 +112,22 @@ export default function Breaks({ selectedClient }) {
         <Empty icon={Check} title="No open breaks" body="Every key matched and every check passed on the latest run." />
       ) : (
         <>
+          {diff && diff.run_id && (diff.new.length > 0 || diff.cleared.length > 0) && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border border-slate-200 bg-white rounded-xl px-4 py-2.5 text-sm shadow-card">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-slate-400">Since last run{diff.ran_at ? ` (${diff.ran_at})` : ''}</span>
+              <span className="inline-flex items-center gap-1.5 text-red-600 font-medium">
+                <Plus size={13} /> {diff.new.length} new
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-emerald-600 font-medium">
+                <CheckCircle2 size={13} /> {diff.cleared.length} cleared
+              </span>
+              {diff.new.length > 0 && (
+                <span className="text-xs text-slate-400 truncate">
+                  new: {diff.new.slice(0, 5).map(b => b.key_label).join(', ')}{diff.new.length > 5 ? '…' : ''}
+                </span>
+              )}
+            </div>
+          )}
           <div className="text-sm text-slate-500">{breaks.length} open exception{breaks.length !== 1 ? 's' : ''} · {openCount} unactioned</div>
           {Object.entries(groups).map(([cond, items]) => (
             <div key={cond} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-card">

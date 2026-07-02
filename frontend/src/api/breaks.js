@@ -8,3 +8,6 @@ export const getBreaks = (clientId, { status, includeCleared } = {}) =>
 
 export const updateBreak = (id, fields) =>
   api.patch(`/breaks/${id}`, fields).then(r => r.data)
+
+export const getBreakDiff = (clientId) =>
+  api.get('/breaks/diff', { params: { client_id: clientId } }).then(r => r.data)

@@ -131,6 +131,7 @@ class Break(Base):
     last_seen = Column(DateTime, default=datetime.now)
     cleared = Column(Boolean, default=False)                 # absent from the latest run
     cleared_at = Column(DateTime, nullable=True)
+    first_run_id = Column(String, nullable=True)             # run that first surfaced it
     last_run_id = Column(String, nullable=True)
 
     client = relationship("Client", back_populates="breaks")

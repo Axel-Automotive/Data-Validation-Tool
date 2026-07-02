@@ -151,11 +151,13 @@ trail. **Effort:** small.
 
 ---
 
-> **Progress (2026-07-02):** T4.1 (break/exception management) shipped with
-> tests — breaks persist across runs with ageing, status (open/ack/resolved),
-> comments, and auto-clear; a Breaks page manages them; `/api/breaks` exposes
-> them. T4.2 (run-to-run diff) partially shipped: each run returns new/cleared/
-> open counts; a dedicated "since last run" view remains.
+> **Progress (2026-07-02):** Tier 4 COMPLETE. T4.1 break/exception management
+> (persist across runs, ageing, status open/ack/resolved, comments, auto-clear,
+> reopen; Breaks page; `/api/breaks`). T4.2 run-to-run diff (`/api/breaks/diff`
+> + a "Since last run: N new / M cleared" strip on the Breaks page).
+>
+> **All four tiers of this roadmap are now shipped.** Remaining optional work:
+> Tier 5 ingestion (header-row selection, large-file caching, OCR).
 
 ## Tier 4 — Reconciliation workflow (differentiator; larger)
 
