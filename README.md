@@ -50,6 +50,12 @@ are not supported (no OCR).
   a condition's match rate drops sharply below its recent average. `GET
   /api/runs/trends` returns per-condition rate history + regression flags, shown
   as a banner on the Run History page.
+- **Break / exception management** — every unmatched key or failed check becomes
+  a tracked **break** that persists across runs (with ageing, status
+  open/acknowledged/resolved, comments, and an assignee). Recurring breaks carry
+  forward; breaks that no longer appear clear automatically; a resolved break
+  that recurs reopens. Managed on the **Breaks** page and via `/api/breaks`;
+  each run reports new/cleared/open counts.
 - **Clients & conditions** — save validation rules per client and run them all at once
 - **Shared conditions** — rules that apply to every client, run before each client's
   own conditions (managed via `/api/shared-conditions`)

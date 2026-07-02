@@ -45,6 +45,8 @@ class Client(Base):
     # nullifies Run.client_id (the row keeps its denormalized client_name). No
     # delete-orphan here, so history is preserved on both SQLite and Postgres.
     runs = relationship("Run", back_populates="client")
+    # Breaks are per-client working state — removed with the client.
+    breaks = relationship("Break", back_populates="client", cascade="all, delete-orphan")
 
 
 class Condition(Base):
@@ -109,6 +111,31 @@ class AxelConnection(Base):
     data = Column(JSON, default=dict)   # connection dict incl. *_enc encrypted secrets
 
 
+class Break(Base):
+    """A single reconciliation exception (unmatched key / failed check), tracked
+    across runs by a stable `signature` so recurring items carry forward."""
+    __tablename__ = "breaks"
+    id = Column(String, primary_key=True, default=_uuid)
+    client_id = Column(String, ForeignKey("clients.id"), nullable=True)
+    signature = Column(String, nullable=False, index=True)   # stable identity across runs
+    condition_name = Column(String, default="")
+    validation_name = Column(String, default="")
+    type = Column(String, default="")                        # comparison type
+    break_type = Column(String, default="")                  # unmatched_axel|unmatched_dms|failed
+    key_label = Column(String, default="")                   # the offending key/group value
+    detail = Column(JSON, default=dict)                      # small display summary
+    status = Column(String, default="open")                  # open | acknowledged | resolved
+    comment = Column(String, default="")
+    assignee = Column(String, default="")
+    first_seen = Column(DateTime, default=datetime.now)
+    last_seen = Column(DateTime, default=datetime.now)
+    cleared = Column(Boolean, default=False)                 # absent from the latest run
+    cleared_at = Column(DateTime, nullable=True)
+    last_run_id = Column(String, nullable=True)
+
+    client = relationship("Client", back_populates="breaks")
+
+
 # ── Serializers (ORM → the dict shapes the app already uses) ───────────────────
 
 def condition_dict(c: Condition, shared: bool = False) -> dict:
@@ -152,4 +179,18 @@ def run_dict(r: Run) -> dict:
         "total": r.total or 0, "errors": r.errors or 0,
         "combined_result_id": r.combined_result_id, "email_to": r.email_to or [],
         "status": r.status, "summary": r.summary_metrics or [],
+    }
+
+
+def break_dict(b: Break) -> dict:
+    age_days = None
+    if b.first_seen:
+        age_days = (datetime.now() - b.first_seen).days
+    return {
+        "id": b.id, "client_id": b.client_id,
+        "condition_name": b.condition_name or "", "validation_name": b.validation_name or "",
+        "type": b.type, "break_type": b.break_type, "key_label": b.key_label or "",
+        "detail": b.detail or {}, "status": b.status, "comment": b.comment or "",
+        "assignee": b.assignee or "", "first_seen": _fmt(b.first_seen), "last_seen": _fmt(b.last_seen),
+        "cleared": bool(b.cleared), "cleared_at": _fmt(b.cleared_at), "age_days": age_days,
     }

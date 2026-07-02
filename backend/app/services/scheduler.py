@@ -10,7 +10,9 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import astimezone
 
 from app.routers.files import load_df, file_meta
-from app.services import client_store, email_service, runs_store, schedule_store, shared_store
+from app.services import (
+    break_store, client_store, email_service, runs_store, schedule_store, shared_store,
+)
 from app.services.excel_service import get_result, run_all_conditions
 
 log = logging.getLogger(__name__)
@@ -193,11 +195,15 @@ def run_schedule(schedule_id: str) -> dict:
             status = "Ran — no recipients configured, not emailed"
 
         schedule_store.mark_run(schedule_id, status, when)
-        runs_store.record(
+        run = runs_store.record(
             client_id=client["id"], client_name=client["name"], kind="scheduled",
             conditions=results, combined_result_id=combined_id, email_to=emailed,
             status="ok" if not n_fail else "errors",
         )
+        try:
+            break_store.sync_from_results(client["id"], run["id"], results)
+        except Exception:
+            log.exception("failed to sync breaks for schedule=%s", schedule_id)
 
         dur_ms = int((time.monotonic() - t0) * 1000)
         cur_rate = _avg_rate(results)

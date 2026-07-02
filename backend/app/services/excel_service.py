@@ -96,6 +96,22 @@ def _norm_series(s: pd.Series, na=""):
     return s.map(lambda v: na if pd.isna(v) else str(v).strip())
 
 
+def _key_breaks(df: pd.DataFrame, key_col: str, break_type: str) -> list[dict]:
+    """One break per row, identified by its key column value."""
+    if df.empty or key_col not in df.columns:
+        return []
+    return [{"break_type": break_type, "key_label": "" if pd.isna(v) else str(v), "detail": {}}
+            for v in df[key_col]]
+
+
+def _row_breaks(df: pd.DataFrame, break_type: str) -> list[dict]:
+    """One break per row, identified by the whole (multi-column) row — used when
+    there is no single join key (Sheet Difference)."""
+    labels = [" | ".join("" if pd.isna(v) else str(v) for v in row)
+              for row in df.itertuples(index=False)]
+    return [{"break_type": break_type, "key_label": lbl, "detail": {}} for lbl in labels]
+
+
 def _dup_keys(s: pd.Series, key_name: str) -> pd.DataFrame:
     """Keys that occur more than once in `s`, with their occurrence count.
 
@@ -310,6 +326,7 @@ def run_sheet_difference(
         },
         "result_id": _save_result(buf.getvalue(), "SheetDifference_Result.xlsx"),
         "_frames": {"In_A_Not_in_B": not_in_b, "In_B_Not_in_A": not_in_a},
+        "_breaks": _row_breaks(not_in_b, "unmatched_axel") + _row_breaks(not_in_a, "unmatched_dms"),
     }
 
 
@@ -413,6 +430,8 @@ def run_stacked_comparison(
         },
         "result_id": _save_result(out.getvalue(), "StackedComparison_Result.xlsx"),
         "_frames": {"Combined": stacked},
+        "_breaks": ([{"break_type": "unmatched_axel", "key_label": str(k), "detail": {}} for k in a_only]
+                    + [{"break_type": "unmatched_dms", "key_label": str(k), "detail": {}} for k in b_only]),
     }
 
 
@@ -525,6 +544,8 @@ def run_calc_difference(
         "result_id": _save_result(buf.getvalue(), "CalcDifference_Result.xlsx"),
         "_frames": {"Differences": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b,
                     **extra_frames},
+        "_breaks": (_key_breaks(unmatched_a, key_disp_a, "unmatched_axel")
+                    + _key_breaks(unmatched_b, key_disp_b, "unmatched_dms")),
     }
 
 
@@ -755,6 +776,9 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
         "result_id": _save_result(out.getvalue(), "CustomRule_Result.xlsx"),
         "_frames": {"Rule_Results": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b,
                     **extra_frames},
+        "_breaks": (_key_breaks(failures, key_a, "failed")
+                    + _key_breaks(unmatched_a, key_a, "unmatched_axel")
+                    + _key_breaks(unmatched_b, key_b, "unmatched_dms")),
     }
 
 
@@ -868,6 +892,9 @@ def run_agg_compare(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
         },
         "result_id": _save_result(out.getvalue(), "AggregateCompare_Result.xlsx"),
         "_frames": {"Aggregate": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b},
+        "_breaks": (_key_breaks(merged[merged["Result"] == "Fail"], gdisp_a, "failed")
+                    + _key_breaks(unmatched_a, gdisp_a, "unmatched_axel")
+                    + _key_breaks(unmatched_b, gdisp_b, "unmatched_dms")),
     }
 
 
@@ -1104,7 +1131,8 @@ def run_all_conditions(
          "validation_name": r["condition"].get("validation_name", ""),
          "type": r["condition"]["type"],
          "metrics": r["result"]["metrics"],
-         "result_id": r["result"]["result_id"]}
+         "result_id": r["result"]["result_id"],
+         "_breaks": r["result"].get("_breaks", [])}
         for r in results
     ] + [{"condition_id": e["condition"]["id"],
           "condition_name": e["condition"]["name"],

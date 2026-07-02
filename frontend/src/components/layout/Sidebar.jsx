@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   ChevronDown, LayoutDashboard, GitCompare,
   Layers, TrendingUp, Settings, Plus, Check, X,
-  Users, CalendarClock, History, Library,
+  Users, CalendarClock, History, Library, AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '../../api/clients'
 import { toast } from '../../lib/toast'
@@ -16,6 +16,7 @@ const NAV = [
   { id: 'conditions', label: 'Conditions',          Icon: Library },
   { id: 'schedules',  label: 'Schedules',           Icon: CalendarClock },
   { id: 'runs',       label: 'Run History',         Icon: History },
+  { id: 'breaks',     label: 'Breaks',              Icon: AlertTriangle },
 ]
 
 const WIDTH = 256

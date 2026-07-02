@@ -12,6 +12,7 @@ from app.services import (
     axel_connection_store,
     axel_query_store,
     axel_source,
+    break_store,
     client_store,
     email_service,
     runs_store,
@@ -165,13 +166,14 @@ def run_all(req: RunAllRequest):
         resp["email_sent"] = True
         resp["email_to"] = sent["recipients"]
 
-    runs_store.record(
+    run = runs_store.record(
         client_id=client["id"], client_name=client["name"],
         kind="email" if req.email else "manual",
         conditions=condition_results, combined_result_id=combined_id,
         email_to=resp["email_to"],
         status="ok" if not any(c.get("error") for c in condition_results) else "errors",
     )
+    resp["breaks"] = break_store.sync_from_results(client["id"], run["id"], condition_results)
     return resp
 
 

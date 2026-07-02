@@ -10,7 +10,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from app.database import init_db
 from app.db_migrate import run_migration
-from app.routers import files, compare, clients, schedules, runs, shared
+from app.routers import files, compare, clients, schedules, runs, shared, breaks
 from app.services import scheduler
 from app.services.excel_service import cleanup_old_results
 from app.routers.files import cleanup_old_files
@@ -43,6 +43,7 @@ app.include_router(files.router,     prefix="/api/files",     tags=["Files"])
 app.include_router(compare.router,   prefix="/api/compare",   tags=["Compare"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(runs.router,      prefix="/api/runs",      tags=["Runs"])
+app.include_router(breaks.router,    prefix="/api/breaks",    tags=["Breaks"])
 app.include_router(shared.router,    prefix="/api/shared-conditions", tags=["Shared"])
 
 

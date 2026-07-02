@@ -151,6 +151,12 @@ trail. **Effort:** small.
 
 ---
 
+> **Progress (2026-07-02):** T4.1 (break/exception management) shipped with
+> tests — breaks persist across runs with ageing, status (open/ack/resolved),
+> comments, and auto-clear; a Breaks page manages them; `/api/breaks` exposes
+> them. T4.2 (run-to-run diff) partially shipped: each run returns new/cleared/
+> open counts; a dedicated "since last run" view remains.
+
 ## Tier 4 — Reconciliation workflow (differentiator; larger)
 
 ### T4.1 — Exception / break management 🔴
