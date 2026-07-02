@@ -1,10 +1,16 @@
 # AXEL Validator
 
 A data‑validation tool for reconciling AXEL company spreadsheets against DMS
-(dealer management system) exports. Upload two files (**Excel `.xlsx/.xls` or
-`.csv`**) — or pull the AXEL side live from a database/API — define reusable
-validation **conditions** per client, run them on demand, schedule them to run
-automatically, and email the resulting report.
+(dealer management system) exports. Upload two files (**Excel `.xlsx/.xls`,
+`.csv` or `.pdf`**) — or pull the AXEL side live from a database/API — define
+reusable validation **conditions** per client, run them on demand, schedule them
+to run automatically, and email the resulting report. PDF uploads are parsed for
+data tables; each detected table appears as a selectable "sheet" (tables that
+repeat the same header across pages are merged into one). Line-printer style DMS
+reports (e.g. a GL detail report with control-grouped rows and no ruled lines)
+are also recognised and exposed as two sheets: **Details** (every journal line)
+and **Summary** (one row per control with its balance). Scanned/image-only PDFs
+are not supported (no OCR).
 
 ---
 

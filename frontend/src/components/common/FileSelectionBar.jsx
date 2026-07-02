@@ -31,7 +31,7 @@ function FileSlot({ label, fileInfo, onUploaded }) {
           loading   ? 'opacity-60 pointer-events-none' : '',
         ].join(' ')}
       >
-        <input ref={ref} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => handle(e.target.files[0])} />
+        <input ref={ref} type="file" accept=".xlsx,.xls,.csv,.pdf" className="hidden" onChange={e => handle(e.target.files[0])} />
         {loading ? (
           <>
             <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -54,7 +54,7 @@ function FileSlot({ label, fileInfo, onUploaded }) {
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-600">Upload {label} file</p>
-              <p className="text-xs text-slate-400">Click or drag .xlsx or .csv</p>
+              <p className="text-xs text-slate-400">Click or drag .xlsx, .csv or .pdf</p>
             </div>
           </>
         )}
