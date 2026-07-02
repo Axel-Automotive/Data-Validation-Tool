@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Check, X, ToggleLeft, ToggleRight, Users, GitCompare, Layers, TrendingUp, SlidersHorizontal, Mail } from 'lucide-react'
+import { Plus, Trash2, Edit2, Check, X, ToggleLeft, ToggleRight, Users, GitCompare, Layers, TrendingUp, SlidersHorizontal, Mail, Sigma } from 'lucide-react'
 import { createClient, updateClient, deleteClient, createCondition, updateCondition, deleteCondition, updateEmailSettings } from '../api/clients'
 import { getAxelQueries } from '../api/axelSources'
 import useFileSelection from '../hooks/useFileSelection'
@@ -14,6 +14,7 @@ const TYPE_META = {
   stacked:    { label: 'Stacked Comparison', Icon: Layers,      chip: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/60' },
   calc_diff:  { label: 'Calc. Difference',   Icon: TrendingUp,  chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60' },
   custom_rule:{ label: 'Custom Rule',        Icon: SlidersHorizontal, chip: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/60' },
+  agg_compare:{ label: 'Aggregate Comparison', Icon: Sigma,           chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/60' },
 }
 
 function ConditionSummary({ cond }) {
@@ -26,7 +27,12 @@ function ConditionSummary({ cond }) {
   if (cond.type === 'calc_diff') return <p className="text-xs text-slate-400 mt-0.5">Key: {cfg.key_axel || '—'} · Values: {cfg.val_axel || '—'} vs {cfg.val_dms || '—'}</p>
   if (cond.type === 'custom_rule') {
     const checks = cfg.checks || []
-    return <p className="text-xs text-slate-400 mt-0.5">Key: {cfg.key_axel || '—'} · {checks.length} check{checks.length !== 1 ? 's' : ''}</p>
+    const key = Array.isArray(cfg.key_axel) ? cfg.key_axel.filter(Boolean).join(' + ') : cfg.key_axel
+    return <p className="text-xs text-slate-400 mt-0.5">Key: {key || '—'} · {checks.length} check{checks.length !== 1 ? 's' : ''}</p>
+  }
+  if (cond.type === 'agg_compare') {
+    const group = Array.isArray(cfg.group_axel) ? cfg.group_axel.filter(Boolean).join(' + ') : cfg.group_axel
+    return <p className="text-xs text-slate-400 mt-0.5">{cfg.metric || 'sum'} of {cfg.value_axel || '—'} by {group || '—'}</p>
   }
   return null
 }

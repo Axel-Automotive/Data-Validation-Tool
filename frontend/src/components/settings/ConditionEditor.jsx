@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal, Wand2, Filter, Eye } from 'lucide-react'
+import { Plus, Trash2, X, Save, GitCompare, Layers, TrendingUp, ChevronDown, SlidersHorizontal, Wand2, Filter, Eye, Sigma } from 'lucide-react'
 import { autoMapColumns } from '../../lib/columnMatch'
 import ResultPreview from './ResultPreview'
 
@@ -8,6 +8,7 @@ const TYPES = [
   { id: 'stacked',     label: 'Stacked Comparison',    Icon: Layers,            desc: 'Match records by a shared key column' },
   { id: 'calc_diff',   label: 'Calculation Difference', Icon: TrendingUp,       desc: 'Compute numeric delta between columns' },
   { id: 'custom_rule', label: 'Custom Rule',           Icon: SlidersHorizontal, desc: 'Build your own column checks, no code' },
+  { id: 'agg_compare', label: 'Aggregate Comparison',  Icon: Sigma,             desc: 'Group by a key, compare sum/count/avg' },
 ]
 
 const NUMERIC_OPS = [
@@ -68,6 +69,66 @@ function ColInput({ value, onChange, options, placeholder }) {
     )
   }
   return <TextInput value={value} onChange={onChange} placeholder={placeholder || 'Column name…'} />
+}
+
+// A join key that can be a single column or a composite of several. Stored as a
+// plain string for the common single-column case (backward compatible) and as an
+// array once more than one column is chosen.
+function KeyColumns({ value, onChange, options, placeholder }) {
+  const view = Array.isArray(value) ? (value.length ? value : ['']) : (value ? [value] : [''])
+  const write = next => {
+    const nonEmpty = next.filter(Boolean)
+    onChange(nonEmpty.length <= 1 ? (nonEmpty[0] || '') : next)   // collapse to string when single
+  }
+  const set    = (i, v) => write(view.map((c, j) => j === i ? v : c))
+  const add    = () => onChange([...view.filter(Boolean), ''])
+  const remove = i => write(view.filter((_, j) => j !== i))
+  return (
+    <div className="space-y-1.5">
+      {view.map((c, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <div className="flex-1"><ColInput value={c} onChange={v => set(i, v)} options={options} placeholder={placeholder} /></div>
+          {view.length > 1 && (
+            <button onClick={() => remove(i)}
+              className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      ))}
+      <button onClick={add} className="inline-flex items-center gap-1 text-2xs font-medium text-brand-600 hover:text-brand-700">
+        <Plus size={11} /> add key column (composite)
+      </button>
+    </div>
+  )
+}
+
+// Optional key canonicalisation — stops trivially-different keys (date formats,
+// leading zeros, case, punctuation) from being reported as breaks.
+const KEY_NORM_OPTS = [
+  ['parse_date',  'Match dates by value'],
+  ['strip_zeros', 'Ignore leading zeros'],
+  ['uppercase',   'Ignore case'],
+  ['alnum_only',  'Ignore spaces & punctuation'],
+]
+
+function KeyNormOptions({ value, onChange }) {
+  const v = value || {}
+  const toggle = k => onChange({ ...v, [k]: !v[k] })
+  return (
+    <div>
+      <Label hint="How keys are matched on both sides">Key matching (optional)</Label>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {KEY_NORM_OPTS.map(([k, label]) => (
+          <label key={k} className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={!!v[k]} onChange={() => toggle(k)}
+              className="w-3.5 h-3.5 rounded border-slate-300 accent-brand-600 cursor-pointer" />
+            {label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // ── Type-specific config forms ────────────────────────────────────────────────
@@ -162,12 +223,26 @@ function CalcDiffForm({ config, onChange, columnsAxel, columnsDms }) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label hint="Key used to join rows in AXEL">Key Column — AXEL</Label>
-          <ColInput value={config.key_axel || ''} onChange={v => set('key_axel', v)} options={columnsAxel} placeholder="e.g. Deal Number" />
+          <Label hint="Join key in AXEL — add columns for a composite key">Key Column — AXEL</Label>
+          <KeyColumns value={config.key_axel || ''} onChange={v => set('key_axel', v)} options={columnsAxel} placeholder="e.g. Deal Number" />
         </div>
         <div>
-          <Label hint="Matching key in DMS (can differ in name)">Key Column — DMS</Label>
-          <ColInput value={config.key_dms || ''} onChange={v => set('key_dms', v)} options={columnsDms} placeholder="e.g. Deal #" />
+          <Label hint="Matching key in DMS (can differ in name); same parts order">Key Column — DMS</Label>
+          <KeyColumns value={config.key_dms || ''} onChange={v => set('key_dms', v)} options={columnsDms} placeholder="e.g. Deal #" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4 items-start">
+        <KeyNormOptions value={config.key_norm} onChange={v => set('key_norm', v)} />
+        <div>
+          <Label hint="How to combine rows that share a key">On duplicate keys</Label>
+          <Select value={config.on_duplicate || 'first'} onChange={v => set('on_duplicate', v)}
+            options={[
+              { id: 'first', label: 'Keep first row' },
+              { id: 'sum',   label: 'Sum values' },
+              { id: 'mean',  label: 'Average values' },
+              { id: 'max',   label: 'Max value' },
+              { id: 'min',   label: 'Min value' },
+            ]} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -220,14 +295,15 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label hint="Key used to join rows in AXEL">Join Key — AXEL</Label>
-          <ColInput value={config.key_axel || ''} onChange={v => set('key_axel', v)} options={columnsAxel} placeholder="e.g. Deal Number" />
+          <Label hint="Join key in AXEL — add columns for a composite key">Join Key — AXEL</Label>
+          <KeyColumns value={config.key_axel || ''} onChange={v => set('key_axel', v)} options={columnsAxel} placeholder="e.g. Deal Number" />
         </div>
         <div>
-          <Label hint="Matching key in DMS (can differ in name)">Join Key — DMS</Label>
-          <ColInput value={config.key_dms || ''} onChange={v => set('key_dms', v)} options={columnsDms} placeholder="Same as AXEL if blank" />
+          <Label hint="Matching key in DMS (can differ in name); same parts order">Join Key — DMS</Label>
+          <KeyColumns value={config.key_dms || ''} onChange={v => set('key_dms', v)} options={columnsDms} placeholder="Same as AXEL if blank" />
         </div>
       </div>
+      <KeyNormOptions value={config.key_norm} onChange={v => set('key_norm', v)} />
 
       <div className="border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between mb-3">
@@ -291,6 +367,68 @@ function CustomRuleForm({ config, onChange, columnsAxel, columnsDms }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const AGG_METRICS = [
+  { id: 'sum',     label: 'Sum' },
+  { id: 'count',   label: 'Count (rows)' },
+  { id: 'mean',    label: 'Average' },
+  { id: 'min',     label: 'Minimum' },
+  { id: 'max',     label: 'Maximum' },
+  { id: 'nunique', label: 'Distinct count' },
+]
+
+function AggCompareForm({ config, onChange, columnsAxel, columnsDms }) {
+  const set = (k, v) => onChange({ ...config, [k]: v })
+  const metric = config.metric || 'sum'
+  const needsValue = metric !== 'count'
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div><Label>AXEL Label</Label><TextInput value={config.axel_label || 'AXEL'} onChange={v => set('axel_label', v)} /></div>
+        <div><Label>DMS Label</Label><TextInput value={config.dms_label || 'DMS'} onChange={v => set('dms_label', v)} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label hint="Group rows by this key — add columns for a composite">Group By — AXEL</Label>
+          <KeyColumns value={config.group_axel || ''} onChange={v => set('group_axel', v)} options={columnsAxel} placeholder="e.g. Account" />
+        </div>
+        <div>
+          <Label hint="Matching group key in DMS (same parts order)">Group By — DMS</Label>
+          <KeyColumns value={config.group_dms || ''} onChange={v => set('group_dms', v)} options={columnsDms} placeholder="Same as AXEL if blank" />
+        </div>
+      </div>
+      <KeyNormOptions value={config.key_norm} onChange={v => set('key_norm', v)} />
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <Label hint="How to aggregate each group">Metric</Label>
+          <Select value={metric} onChange={v => set('metric', v)} options={AGG_METRICS} />
+        </div>
+        <div>
+          <Label hint="Absolute tolerance">Tolerance</Label>
+          <input type="number" step="any" value={config.tolerance ?? 0} onChange={e => set('tolerance', e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+        </div>
+        <div>
+          <Label hint="% of the DMS value">Tolerance %</Label>
+          <input type="number" step="any" value={config.tolerance_pct ?? 0} onChange={e => set('tolerance_pct', e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+        </div>
+      </div>
+      {needsValue && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label hint="Numeric column to aggregate in AXEL">Value Column — AXEL</Label>
+            <ColInput value={config.value_axel || ''} onChange={v => set('value_axel', v)} options={columnsAxel} placeholder="e.g. Amount" />
+          </div>
+          <div>
+            <Label hint="Numeric column to aggregate in DMS">Value Column — DMS</Label>
+            <ColInput value={config.value_dms || ''} onChange={v => set('value_dms', v)} options={columnsDms} placeholder="e.g. Amount" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -449,6 +587,7 @@ export default function ConditionEditor({ initial, presetType, lockType, columns
           {type === 'stacked'     && <StackedForm    config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
           {type === 'calc_diff'   && <CalcDiffForm   config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
           {type === 'custom_rule' && <CustomRuleForm config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
+          {type === 'agg_compare' && <AggCompareForm config={config} onChange={setConfig} columnsAxel={columnsAxel} columnsDms={columnsDms} />}
         </div>
 
         {/* Row filters — collapsible */}

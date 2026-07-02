@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services.excel_service import (  # noqa: E402
-    run_sheet_difference, run_calc_difference, run_custom_rule,
+    run_sheet_difference, run_calc_difference, run_custom_rule, run_agg_compare,
     run_all_conditions, run_condition, get_result, _sanitize_sheet,
     _norm_series, _apply_filters,
 )
@@ -67,12 +67,41 @@ def test_calc_diff_no_fanout_on_duplicate_keys():
     assert r["metrics"]["excluded_a"] >= 0       # never negative
 
 
+def test_calc_diff_reports_duplicate_keys():
+    # AXEL key "1" appears 3× — the drops must be reported, not silent.
+    a = pd.DataFrame({"K": ["1", "1", "1", "2"], "V": [10, 20, 30, 40]})
+    b = pd.DataFrame({"K": ["1", "2"], "V": [10, 40]})
+    r = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V")
+    assert r["metrics"]["duplicate_keys_a"] == 1     # one key ("1") had dupes
+    assert r["metrics"]["duplicate_keys_b"] == 0
+    dup = r["_frames"]["Duplicate Keys AXEL"]
+    assert dup[dup["K"] == "1"]["Occurrences"].iloc[0] == 3
+
+
 def test_calc_diff_difference_value():
     a = pd.DataFrame({"K": ["x"], "V": [100]})
     b = pd.DataFrame({"K": ["x"], "V": [70]})
     r = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V")
     assert r["metrics"]["matched"] == 1
     assert r["metrics"]["a_gt_b"] == 1
+
+
+def test_calc_diff_exports_unmatched_breaks():
+    # Key "2" is only in AXEL, "3" only in DMS — both are reconciliation breaks
+    # that must appear in the output, not just the metric counts.
+    a = pd.DataFrame({"K": ["1", "2"], "V": [100, 50]})
+    b = pd.DataFrame({"K": ["1", "3"], "V": [100, 70]})
+    r = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V")
+    m = r["metrics"]
+    assert m["matched"] == 1
+    assert m["unmatched_a"] == 1 and m["unmatched_b"] == 1
+    frames = r["_frames"]
+    assert "Unmatched AXEL" in frames and "Unmatched DMS" in frames
+    assert frames["Unmatched AXEL"]["K"].tolist() == ["2"]
+    assert frames["Unmatched DMS"]["K"].tolist() == ["3"]
+    # And they ride into the on-screen preview too.
+    assert r["preview"]["unmatched_a"]["total"] == 1
+    assert r["preview"]["unmatched_b"]["total"] == 1
 
 
 # ── Custom rule ─────────────────────────────────────────────────────────────────
@@ -94,10 +123,114 @@ def test_custom_rule_numeric_and_text():
     assert m["failed"] == 1
 
 
+def test_composite_key_calc_and_rule():
+    # Row identity is Acct+Deal; 206/1 vs 206/9 is a break on each side.
+    a = pd.DataFrame({"Acct": ["205", "205", "206"], "Deal": ["1", "2", "1"], "V": [100, 200, 300]})
+    b = pd.DataFrame({"Acct": ["205", "205", "206"], "Deal": ["1", "2", "9"], "V": [100, 250, 300]})
+
+    r = run_calc_difference(a, b, "AXEL", "DMS", ["Acct", "Deal"], "V", "V", ["Acct", "Deal"])
+    m = r["metrics"]
+    assert m["matched"] == 2 and m["unmatched_a"] == 1 and m["unmatched_b"] == 1
+    assert "Acct + Deal" in r["_frames"]["Differences"].columns
+
+    cfg = {"key_axel": ["Acct", "Deal"],
+           "checks": [{"axel_col": "V", "dms_col": "V", "mode": "numeric", "op": "eq", "tolerance": 0}]}
+    rr = run_custom_rule(a, b, cfg)
+    assert rr["metrics"]["matched"] == 2 and rr["metrics"]["passed"] == 1
+
+    # Single-string key stays fully backward compatible.
+    assert run_calc_difference(a, b, "AXEL", "DMS", "Acct", "V", "V")["metrics"]["matched"] == 2
+
+
+def test_calc_diff_on_duplicate_sum():
+    # AXEL has two journal lines for deal 1 (15 + 5); DMS carries the total 20.
+    a = pd.DataFrame({"K": ["1", "1", "2"], "V": [15, 5, 30]})
+    b = pd.DataFrame({"K": ["1", "2"], "V": [20, 30]})
+    # Default "first" keeps only 15 → a false break of -5.
+    first = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V")
+    assert first["metrics"]["matched"] == 2
+    # Summing duplicates reconciles deal 1 exactly.
+    summed = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V", on_duplicate="sum")
+    diffs = summed["_frames"]["Differences"]
+    assert diffs[diffs["K"] == "1"]["Difference"].iloc[0] == 0
+    assert summed["metrics"]["zero"] == 2
+
+
+def test_key_canonicalization_matches_across_formats():
+    # Same deals, keys differ by leading zeros / case / date format.
+    a = pd.DataFrame({"K": ["007", "abc"], "V": [100, 200]})
+    b = pd.DataFrame({"K": ["7", "ABC"], "V": [100, 200]})
+    # Without canonicalisation nothing matches.
+    assert run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V")["metrics"]["matched"] == 0
+    # With strip_zeros + uppercase, both match.
+    r = run_calc_difference(a, b, "AXEL", "DMS", "K", "V", "V",
+                            key_norm={"strip_zeros": True, "uppercase": True})
+    assert r["metrics"]["matched"] == 2
+
+    # Date-format normalisation on the key.
+    da = pd.DataFrame({"D": ["6/27/26"], "V": [10]})
+    db = pd.DataFrame({"D": ["2026-06-27"], "V": [10]})
+    assert run_calc_difference(da, db, "AXEL", "DMS", "D", "V", "V")["metrics"]["matched"] == 0
+    r2 = run_calc_difference(da, db, "AXEL", "DMS", "D", "V", "V", key_norm={"parse_date": True})
+    assert r2["metrics"]["matched"] == 1
+
+
+def test_agg_compare_sum_by_group():
+    # AXEL has detail lines; DMS carries per-account totals. Reconcile the sums.
+    a = pd.DataFrame({"Acct": ["205", "205", "206"], "Amt": [15420.51, 18946.75, 300.0]})
+    b = pd.DataFrame({"Acct": ["205", "206"], "Total": [34367.26, 305.0]})
+    cfg = {"group_axel": "Acct", "group_dms": "Acct", "metric": "sum",
+           "value_axel": "Amt", "value_dms": "Total", "tolerance": 0}
+    r = run_agg_compare(a, b, cfg)
+    m = r["metrics"]
+    assert m["matched"] == 2
+    assert m["passed"] == 1     # 205 sums to 34367.26 (pass), 206 off by 5 (fail)
+    assert m["failed"] == 1
+    agg = r["_frames"]["Aggregate"]
+    assert agg[agg["Acct"] == "205"]["Result"].iloc[0] == "Pass"
+    assert agg[agg["Acct"] == "206"]["Result"].iloc[0] == "Fail"
+
+
+def test_agg_compare_count_needs_no_value():
+    a = pd.DataFrame({"Acct": ["205", "205", "206"]})
+    b = pd.DataFrame({"Acct": ["205", "205", "206", "206"]})
+    r = run_agg_compare(a, b, {"group_axel": "Acct", "metric": "count", "tolerance": 0})
+    agg = r["_frames"]["Aggregate"]
+    assert agg[agg["Acct"] == "205"]["Result"].iloc[0] == "Pass"   # 2 vs 2
+    assert agg[agg["Acct"] == "206"]["Result"].iloc[0] == "Fail"   # 1 vs 2
+
+
+def test_agg_compare_percentage_tolerance():
+    a = pd.DataFrame({"G": ["x"], "V": [1000.0]})
+    b = pd.DataFrame({"G": ["x"], "V": [1005.0]})
+    # 5 diff on 1005 ≈ 0.5% → passes a 1% band, fails absolute-0.
+    strict = run_agg_compare(a, b, {"group_axel": "G", "metric": "sum",
+                                    "value_axel": "V", "value_dms": "V", "tolerance": 0})
+    assert strict["metrics"]["passed"] == 0
+    lax = run_agg_compare(a, b, {"group_axel": "G", "metric": "sum",
+                                 "value_axel": "V", "value_dms": "V", "tolerance_pct": 1.0})
+    assert lax["metrics"]["passed"] == 1
+
+
 def test_custom_rule_requires_key_and_checks():
     a = pd.DataFrame({"K": ["1"]})
     with pytest.raises(HTTPException):
         run_custom_rule(a, a, {"key_axel": "", "checks": []})
+
+
+def test_custom_rule_exports_unmatched_breaks():
+    # Deal "3" only in AXEL, "4" only in DMS → must be exported as breaks.
+    a = pd.DataFrame({"Deal": ["1", "2", "3"], "G": [100, 200, 300]})
+    b = pd.DataFrame({"DealNo": ["1", "2", "4"], "R": [100, 200, 400]})
+    cfg = {"key_axel": "Deal", "key_dms": "DealNo", "checks": [
+        {"axel_col": "G", "dms_col": "R", "mode": "numeric", "op": "eq", "tolerance": 0}]}
+    r = run_custom_rule(a, b, cfg)
+    m = r["metrics"]
+    assert m["matched"] == 2
+    assert m["unmatched_a"] == 1 and m["unmatched_b"] == 1
+    frames = r["_frames"]
+    assert frames["Unmatched AXEL"]["Deal"].tolist() == ["3"]
+    assert frames["Unmatched DMS"]["DealNo"].tolist() == ["4"]
 
 
 def test_custom_rule_duplicate_keys_do_not_inflate_unmatched():

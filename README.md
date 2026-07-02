@@ -22,6 +22,17 @@ are not supported (no OCR).
   - **Calculation Difference** — numeric delta between value columns
   - **Custom Rule** — a no‑code rule builder (join key + column checks with
     numeric/text operators and tolerances)
+- **Reconciliation breaks surfaced** — Calculation Difference and Custom Rule
+  export the **unmatched** keys (present on one side only) as their own
+  *Unmatched AXEL* / *Unmatched DMS* sheets, not just matched rows.
+- **Composite join keys** — a condition's join key can be one column *or*
+  several (e.g. `Account + Deal`), configured per side.
+- **Key matching options** — optionally match keys by ignoring leading zeros,
+  case, spaces/punctuation, or by parsing dates — so trivially-different keys
+  don't show up as false breaks.
+- **Duplicate-key handling** — duplicate keys are reported (a *Duplicate Keys*
+  sheet + counts) instead of silently dropped; Calculation Difference can
+  collapse them by keeping the first row or aggregating (sum/avg/max/min).
 - **Clients & conditions** — save validation rules per client and run them all at once
 - **Shared conditions** — rules that apply to every client, run before each client's
   own conditions (managed via `/api/shared-conditions`)

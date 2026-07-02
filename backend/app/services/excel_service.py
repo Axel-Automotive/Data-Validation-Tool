@@ -94,6 +94,71 @@ def _norm_series(s: pd.Series, na=""):
     return s.map(lambda v: na if pd.isna(v) else str(v).strip())
 
 
+def _dup_keys(s: pd.Series, key_name: str) -> pd.DataFrame:
+    """Keys that occur more than once in `s`, with their occurrence count.
+
+    Calc/rule comparisons keep only the first row per key, so duplicates are
+    silently dropped; this makes that data loss visible instead."""
+    vc = s.value_counts()
+    vc = vc[vc > 1]
+    return pd.DataFrame({key_name: vc.index.astype(str), "Occurrences": vc.values.astype(int)})
+
+
+# ── Join keys (single column or composite of several) ──────────────────────────
+
+_KEY_SEP = "␟"   # unit separator — joins composite key parts, unlikely in data
+
+
+def _key_cols(spec) -> list[str]:
+    """A key spec is a single column name (str) or a list of names. Normalise
+    to a list of non-blank names. Keeps single-string configs working as-is."""
+    if isinstance(spec, (list, tuple)):
+        return [str(c).strip() for c in spec if str(c).strip()]
+    s = str(spec or "").strip()
+    return [s] if s else []
+
+
+def _key_label(cols: list[str]) -> str:
+    """Display name for a (possibly composite) key."""
+    return " + ".join(cols)
+
+
+def _canon_value(s: pd.Series, opts: dict | None) -> pd.Series:
+    """Optional key canonicalisation to stop trivially-different keys from being
+    reported as breaks. `opts` flags (all optional):
+      parse_date   → parse to a date and render ISO (YYYY-MM-DD)
+      strip_zeros  → drop leading zeros ("007" → "7", "0" stays "0")
+      uppercase    → upper-case
+      alnum_only   → keep only letters/digits (drops spaces, dashes, punctuation)
+    """
+    if not opts:
+        return s
+    out = s
+    if opts.get("parse_date"):
+        d = pd.to_datetime(out, errors="coerce")
+        out = out.where(d.isna(), d.dt.strftime("%Y-%m-%d"))
+    if opts.get("strip_zeros"):
+        out = out.str.replace(r"^0+(?=.)", "", regex=True)
+    if opts.get("uppercase"):
+        out = out.str.upper()
+    if opts.get("alnum_only"):
+        out = out.str.replace(r"[^A-Za-z0-9]", "", regex=True)
+    return out
+
+
+def _composite_key(df: pd.DataFrame, cols: list[str], na="", norm: dict | None = None) -> pd.Series:
+    """Build a normalised key Series from one or more columns of `df`.
+    Each part is normalised via `_norm_series`, optionally canonicalised
+    (`norm`), then joined with `_KEY_SEP`."""
+    if not cols:
+        raise HTTPException(400, "A join key column is required.")
+    parts = [_canon_value(_norm_series(df[_find_col(df, c)], na=na), norm) for c in cols]
+    key = parts[0]
+    for p in parts[1:]:
+        key = key.str.cat(p, sep=_KEY_SEP)
+    return key
+
+
 # ── Row filtering (applied to either file before any comparison) ────────────────
 #
 # config["filters"] = {
@@ -328,46 +393,76 @@ def run_calc_difference(
     num_col_a: str,
     num_col_b: str,
     key_col_b: str | None = None,
+    key_norm: dict | None = None,
+    on_duplicate: str = "first",
 ) -> dict:
-    key_col_a = _find_col(df_a, key_col_a)
+    # Key can be a single column or a composite (list of columns). The DMS side
+    # mirrors AXEL when its key is blank.
+    key_cols_a = _key_cols(key_col_a)
+    key_cols_b = _key_cols(key_col_b) or key_cols_a
+    key_disp_a = _key_label(key_cols_a)
+    key_disp_b = _key_label(key_cols_b)
     num_col_a = _find_col(df_a, num_col_a)
     num_col_b = _find_col(df_b, num_col_b)
-    key_col_b = _find_col(df_b, key_col_b) if key_col_b else key_col_a
-
-    ta = df_a[[key_col_a, num_col_a]].copy()
-    tb = df_b[[key_col_b, num_col_b]].copy()
 
     val_a = f"{num_col_a} [{name_a}]"
     val_b = f"{num_col_b} [{name_b}]"
     if val_a == val_b:
         val_a, val_b = f"{val_a} (A)", f"{val_b} (B)"
 
-    ta = ta.rename(columns={num_col_a: val_a, key_col_a: "KEY"})
-    tb = tb.rename(columns={num_col_b: val_b, key_col_b: "KEY"})
-
-    ta["KEY"] = _norm_series(ta["KEY"])
-    tb["KEY"] = _norm_series(tb["KEY"])
-    ta[val_a] = pd.to_numeric(ta[val_a], errors="coerce")
-    tb[val_b] = pd.to_numeric(tb[val_b], errors="coerce")
+    ta = pd.DataFrame({"KEY": _composite_key(df_a, key_cols_a, norm=key_norm),
+                       val_a: pd.to_numeric(df_a[num_col_a], errors="coerce")})
+    tb = pd.DataFrame({"KEY": _composite_key(df_b, key_cols_b, norm=key_norm),
+                       val_b: pd.to_numeric(df_b[num_col_b], errors="coerce")})
 
     rows_a, rows_b = len(ta), len(tb)
-    # Drop duplicate keys so an inner merge can't fan out (N×M rows) and
-    # inflate the metrics — keep the first occurrence per key on each side.
-    ta = ta.drop_duplicates("KEY")
-    tb = tb.drop_duplicates("KEY")
+    # Surface duplicate keys BEFORE collapsing them — an inner merge would
+    # otherwise fan out (N×M), and keeping only the first row silently discards
+    # the rest. Reviewers need to know which keys were affected.
+    dups_a = _dup_keys(ta["KEY"], key_disp_a)
+    dups_b = _dup_keys(tb["KEY"], key_disp_b)
+    # Collapse duplicate keys per the chosen strategy: keep the first row, or
+    # aggregate the value column (sum/mean/max/min) — sum is typical for money.
+    if on_duplicate in ("sum", "mean", "max", "min"):
+        ta = ta.groupby("KEY", as_index=False)[val_a].agg(on_duplicate)
+        tb = tb.groupby("KEY", as_index=False)[val_b].agg(on_duplicate)
+    else:
+        ta = ta.drop_duplicates("KEY")
+        tb = tb.drop_duplicates("KEY")
 
     merged             = pd.merge(ta, tb, on="KEY", how="inner")
     merged["Difference"] = merged[val_a] - merged[val_b]
-    merged             = merged.rename(columns={"KEY": key_col_a})
+
+    # The unmatched keys are the reconciliation "breaks": keys present on one
+    # side but with no counterpart on the other. Surface them as their own
+    # sheets — they're usually the whole point of running the comparison.
+    a_keys, b_keys = set(ta["KEY"]), set(tb["KEY"])
+    unmatched_a = ta[~ta["KEY"].isin(b_keys)].rename(columns={"KEY": key_disp_a})
+    unmatched_b = tb[~tb["KEY"].isin(a_keys)].rename(columns={"KEY": key_disp_b})
+
+    merged             = merged.rename(columns={"KEY": key_disp_a})
 
     a_gt_b    = int((merged["Difference"] > 0).sum())
     a_lt_b    = int((merged["Difference"] < 0).sum())
     zero_diff = int((merged["Difference"] == 0).sum())
     mean_diff = float(merged["Difference"].mean()) if not merged.empty else 0.0
 
+    sh_unm_a = _sanitize_sheet(f"Unmatched {name_a}")
+    sh_unm_b = _sanitize_sheet(f"Unmatched {name_b}")
+
+    extra_frames: dict[str, pd.DataFrame] = {}
+    if not dups_a.empty:
+        extra_frames[_sanitize_sheet(f"Duplicate Keys {name_a}")] = dups_a
+    if not dups_b.empty:
+        extra_frames[_sanitize_sheet(f"Duplicate Keys {name_b}")] = dups_b
+
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
         merged.to_excel(w, sheet_name="Differences", index=False)
+        unmatched_a.to_excel(w, sheet_name=sh_unm_a, index=False)
+        unmatched_b.to_excel(w, sheet_name=sh_unm_b, index=False)
+        for sh, fr in extra_frames.items():
+            fr.to_excel(w, sheet_name=sh, index=False)
     buf.seek(0)
 
     return {
@@ -380,13 +475,20 @@ def run_calc_difference(
             "mean_diff": round(mean_diff, 4),
             "excluded_a": len(ta) - len(merged),
             "excluded_b": len(tb) - len(merged),
+            "unmatched_a": len(unmatched_a), "unmatched_b": len(unmatched_b),
+            "duplicate_keys_a": len(dups_a), "duplicate_keys_b": len(dups_b),
         },
         "preview": {
             "differences": {"data": _to_records(merged), "total": len(merged),
                             "columns": merged.columns.tolist()},
+            "unmatched_a": {"data": _to_records(unmatched_a), "total": len(unmatched_a),
+                            "columns": unmatched_a.columns.tolist()},
+            "unmatched_b": {"data": _to_records(unmatched_b), "total": len(unmatched_b),
+                            "columns": unmatched_b.columns.tolist()},
         },
         "result_id": _save_result(buf.getvalue(), "CalcDifference_Result.xlsx"),
-        "_frames": {"Differences": merged},
+        "_frames": {"Differences": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b,
+                    **extra_frames},
     }
 
 
@@ -433,17 +535,18 @@ def _text_op(op: str, a: pd.Series, b: pd.Series) -> pd.Series:
 def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dict:
     name_a = config.get("axel_label", "AXEL")
     name_b = config.get("dms_label",  "DMS")
-    key_a  = (config.get("key_axel") or "").strip()
-    key_b  = (config.get("key_dms")  or "").strip() or key_a
+    # Join key: single column or composite (list). DMS mirrors AXEL when blank.
+    key_cols_a = _key_cols(config.get("key_axel"))
+    key_cols_b = _key_cols(config.get("key_dms")) or key_cols_a
     checks = config.get("checks", [])
 
-    if not key_a:
+    if not key_cols_a:
         raise HTTPException(400, "A join key column is required for the rule.")
     if not checks:
         raise HTTPException(400, "Add at least one comparison check to the rule.")
 
-    ka = _find_col(df_a, key_a)
-    kb = _find_col(df_b, key_b)
+    key_a, key_b = _key_label(key_cols_a), _key_label(key_cols_b)
+    key_norm = config.get("key_norm")
 
     # Distinct columns referenced by the checks (resolved against each frame)
     axel_cols = list(dict.fromkeys(c.get("axel_col", "") for c in checks if c.get("axel_col")))
@@ -452,15 +555,17 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
         if not c.get("axel_col") or not c.get("dms_col"):
             raise HTTPException(400, "Every check needs both an AXEL and a DMS column.")
 
-    left  = df_a[[ka] + [_find_col(df_a, c) for c in axel_cols]].copy()
-    left.columns  = ["__KEY__"] + [f"{c} [{name_a}]" for c in axel_cols]
-    right = df_b[[kb] + [_find_col(df_b, c) for c in dms_cols]].copy()
-    right.columns = ["__KEY__"] + [f"{c} [{name_b}]" for c in dms_cols]
-
-    left["__KEY__"]  = _norm_series(left["__KEY__"])
-    right["__KEY__"] = _norm_series(right["__KEY__"])
+    left  = df_a[[_find_col(df_a, c) for c in axel_cols]].copy()
+    left.columns  = [f"{c} [{name_a}]" for c in axel_cols]
+    left.insert(0, "__KEY__", _composite_key(df_a, key_cols_a, norm=key_norm).values)
+    right = df_b[[_find_col(df_b, c) for c in dms_cols]].copy()
+    right.columns = [f"{c} [{name_b}]" for c in dms_cols]
+    right.insert(0, "__KEY__", _composite_key(df_b, key_cols_b, norm=key_norm).values)
 
     rows_a, rows_b = len(left), len(right)
+    # Surface duplicate keys before collapsing them (see calc_diff).
+    dups_a = _dup_keys(left["__KEY__"], key_a)
+    dups_b = _dup_keys(right["__KEY__"], key_b)
     # Keep first occurrence per key so duplicate keys don't fan out.
     left  = left.drop_duplicates("__KEY__")
     right = right.drop_duplicates("__KEY__")
@@ -468,6 +573,12 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     # distinct joined keys, so subtracting it from the raw row count (which may
     # include duplicate keys) would report phantom unmatched rows.
     distinct_a, distinct_b = len(left), len(right)
+
+    # Unmatched keys = the reconciliation breaks (a key on one side with no
+    # counterpart on the other). Carry the check columns so the sheet is useful.
+    a_keys, b_keys = set(left["__KEY__"]), set(right["__KEY__"])
+    unmatched_a = left[~left["__KEY__"].isin(b_keys)].rename(columns={"__KEY__": key_a})
+    unmatched_b = right[~right["__KEY__"].isin(a_keys)].rename(columns={"__KEY__": key_b})
 
     merged = left.merge(right, on="__KEY__", how="inner")
     pass_all = pd.Series(True, index=merged.index)
@@ -519,11 +630,24 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
     failed  = matched - passed
     failures = merged[pass_all.values == False] if matched else merged  # noqa: E712
 
+    sh_unm_a = _sanitize_sheet(f"Unmatched {name_a}")
+    sh_unm_b = _sanitize_sheet(f"Unmatched {name_b}")
+
+    extra_frames: dict[str, pd.DataFrame] = {}
+    if not dups_a.empty:
+        extra_frames[_sanitize_sheet(f"Duplicate Keys {name_a}")] = dups_a
+    if not dups_b.empty:
+        extra_frames[_sanitize_sheet(f"Duplicate Keys {name_b}")] = dups_b
+
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
         merged.to_excel(w, sheet_name="Rule_Results", index=False)
         if failed:
             failures.to_excel(w, sheet_name="Failures", index=False)
+        unmatched_a.to_excel(w, sheet_name=sh_unm_a, index=False)
+        unmatched_b.to_excel(w, sheet_name=sh_unm_b, index=False)
+        for sh, fr in extra_frames.items():
+            fr.to_excel(w, sheet_name=sh, index=False)
     buf.seek(0)
 
     # Highlight the exact cells that broke each check, so a reviewer can jump
@@ -559,13 +683,132 @@ def run_custom_rule(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dic
             "pass_rate": round(passed / max(matched, 1) * 100, 1),
             "checks": len(checks),
             "unmatched_a": distinct_a - matched, "unmatched_b": distinct_b - matched,
+            "duplicate_keys_a": len(dups_a), "duplicate_keys_b": len(dups_b),
         },
         "preview": {
             "results": {"data": _to_records(merged), "total": matched,
                         "columns": merged.columns.tolist()},
+            "unmatched_a": {"data": _to_records(unmatched_a), "total": len(unmatched_a),
+                            "columns": unmatched_a.columns.tolist()},
+            "unmatched_b": {"data": _to_records(unmatched_b), "total": len(unmatched_b),
+                            "columns": unmatched_b.columns.tolist()},
         },
         "result_id": _save_result(out.getvalue(), "CustomRule_Result.xlsx"),
-        "_frames": {"Rule_Results": merged},
+        "_frames": {"Rule_Results": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b,
+                    **extra_frames},
+    }
+
+
+# ── Aggregate / group-by comparison ───────────────────────────────────────────
+#
+# config = {
+#   axel_label, dms_label,
+#   group_axel, group_dms,         # group-by key (single col or composite list)
+#   metric: sum|count|mean|min|max|nunique,
+#   value_axel, value_dms,         # value column (not needed for `count`)
+#   tolerance, tolerance_pct,      # pass band: abs(diff) <= max(tol, pct% of DMS)
+#   key_norm,                      # same canonicalisation options as join keys
+# }
+
+_AGG_METRICS = {"sum", "count", "mean", "min", "max", "nunique"}
+
+
+def run_agg_compare(df_a: pd.DataFrame, df_b: pd.DataFrame, config: dict) -> dict:
+    name_a = config.get("axel_label", "AXEL")
+    name_b = config.get("dms_label",  "DMS")
+    group_a = _key_cols(config.get("group_axel"))
+    group_b = _key_cols(config.get("group_dms")) or group_a
+    metric  = (config.get("metric") or "sum").strip().lower()
+    val_a   = (config.get("value_axel") or "").strip()
+    val_b   = (config.get("value_dms")  or "").strip()
+    tol     = float(config.get("tolerance") or 0)
+    tol_pct = float(config.get("tolerance_pct") or 0)
+    key_norm = config.get("key_norm")
+
+    if not group_a:
+        raise HTTPException(400, "A group-by column is required for aggregate comparison.")
+    if metric not in _AGG_METRICS:
+        raise HTTPException(400, f"Unknown metric: {metric}")
+    if metric != "count" and not (val_a and val_b):
+        raise HTTPException(400, f"The '{metric}' metric needs a value column on both sides.")
+
+    gdisp_a, gdisp_b = _key_label(group_a), _key_label(group_b)
+
+    def _agg(df: pd.DataFrame, group_cols: list[str], valcol: str) -> pd.Series:
+        key = _composite_key(df, group_cols, norm=key_norm)
+        frame = pd.DataFrame({"GROUP": key.values})
+        if metric == "count":
+            return frame.groupby("GROUP").size()
+        frame["V"] = pd.to_numeric(df[_find_col(df, valcol)], errors="coerce").values
+        return frame.groupby("GROUP")["V"].agg(metric)
+
+    ga = _agg(df_a, group_a, val_a)
+    gb = _agg(df_b, group_b, val_b)
+
+    label = f"{metric}({val_a or 'rows'})"
+    m_col_a, m_col_b = f"{label} [{name_a}]", f"{label} [{name_b}]"
+
+    merged = pd.DataFrame({m_col_a: ga}).join(pd.DataFrame({m_col_b: gb}), how="inner")
+    merged["Difference"] = merged[m_col_a] - merged[m_col_b]
+    allow = pd.concat(
+        [pd.Series(tol, index=merged.index), merged[m_col_b].abs() * (tol_pct / 100.0)],
+        axis=1,
+    ).max(axis=1)
+    passed_mask = merged["Difference"].abs() <= allow
+    merged["Result"] = passed_mask.map({True: "Pass", False: "Fail"})
+    merged = merged.reset_index().rename(columns={"GROUP": gdisp_a})
+
+    a_only = ga.index.difference(gb.index)
+    b_only = gb.index.difference(ga.index)
+    unmatched_a = pd.DataFrame({gdisp_a: list(a_only), m_col_a: ga.loc[a_only].values})
+    unmatched_b = pd.DataFrame({gdisp_b: list(b_only), m_col_b: gb.loc[b_only].values})
+
+    matched = len(merged)
+    passed  = int(passed_mask.sum())
+
+    sh_unm_a = _sanitize_sheet(f"Unmatched {name_a}")
+    sh_unm_b = _sanitize_sheet(f"Unmatched {name_b}")
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as w:
+        merged.to_excel(w, sheet_name="Aggregate", index=False)
+        unmatched_a.to_excel(w, sheet_name=sh_unm_a, index=False)
+        unmatched_b.to_excel(w, sheet_name=sh_unm_b, index=False)
+    buf.seek(0)
+
+    # Red-fill the failing groups so a reviewer can spot them at a glance.
+    wb = load_workbook(buf)
+    ws = wb["Aggregate"]
+    RED = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
+    hdr = {cell.value: i + 1 for i, cell in enumerate(ws[1])}
+    res_idx = hdr.get("Result")
+    for r in range(2, ws.max_row + 1):
+        if res_idx and ws.cell(row=r, column=res_idx).value == "Fail":
+            for c in range(1, ws.max_column + 1):
+                ws.cell(row=r, column=c).fill = RED
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+
+    return {
+        "type": "agg_compare",
+        "metrics": {
+            "groups_a": int(ga.size), "groups_b": int(gb.size),
+            "matched": matched, "passed": passed, "failed": matched - passed,
+            "pass_rate": round(passed / max(matched, 1) * 100, 1),
+            "metric": metric,
+            "unmatched_a": len(unmatched_a), "unmatched_b": len(unmatched_b),
+        },
+        "preview": {
+            "results": {"data": _to_records(merged), "total": matched,
+                        "columns": merged.columns.tolist()},
+            "unmatched_a": {"data": _to_records(unmatched_a), "total": len(unmatched_a),
+                            "columns": unmatched_a.columns.tolist()},
+            "unmatched_b": {"data": _to_records(unmatched_b), "total": len(unmatched_b),
+                            "columns": unmatched_b.columns.tolist()},
+        },
+        "result_id": _save_result(out.getvalue(), "AggregateCompare_Result.xlsx"),
+        "_frames": {"Aggregate": merged, sh_unm_a: unmatched_a, sh_unm_b: unmatched_b},
     }
 
 
@@ -605,10 +848,15 @@ def run_condition(df_axel: pd.DataFrame, df_dms: pd.DataFrame, ctype: str, confi
             config.get("val_axel",  ""),
             config.get("val_dms",   ""),
             config.get("key_dms"),
+            config.get("key_norm"),
+            config.get("on_duplicate", "first"),
         )
 
     if ctype == "custom_rule":
         return run_custom_rule(df_axel, df_dms, config)
+
+    if ctype == "agg_compare":
+        return run_agg_compare(df_axel, df_dms, config)
 
     raise HTTPException(400, f"Unknown condition type: {ctype}")
 
@@ -638,7 +886,8 @@ def run_all_conditions(
     type_labels = {"sheet_diff": "Sheet Difference",
                    "stacked":    "Stacked Comparison",
                    "calc_diff":  "Calculation Difference",
-                   "custom_rule": "Custom Rule"}
+                   "custom_rule": "Custom Rule",
+                   "agg_compare": "Aggregate Comparison"}
 
     # Build combined Excel
     buf = io.BytesIO()
@@ -665,6 +914,9 @@ def run_all_conditions(
                              "A<B": m["a_lt_b"], "Mean Diff": m["mean_diff"],
                              "Match Rate %": m["match_rate"]})
             elif cond["type"] == "custom_rule":
+                row.update({"Matched": m["matched"], "Passed": m["passed"],
+                             "Failed": m["failed"], "Pass Rate %": m["pass_rate"]})
+            elif cond["type"] == "agg_compare":
                 row.update({"Matched": m["matched"], "Passed": m["passed"],
                              "Failed": m["failed"], "Pass Rate %": m["pass_rate"]})
             summary_rows.append(row)

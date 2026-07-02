@@ -40,6 +40,10 @@ function MiniTable({ sheet, columns, rows }) {
   )
 }
 
+// A key can be a single column (string) or a composite (array of columns).
+const keyLabel = (k, fallback = 'Key') =>
+  (Array.isArray(k) ? k.filter(Boolean).join(' + ') : k) || fallback
+
 // Build the sheet layout(s) for a given type + config.
 function buildSheets(type, config) {
   const cfg = config || {}
@@ -55,7 +59,7 @@ function buildSheets(type, config) {
 
   if (type === 'stacked') {
     const a = cfg.axel_label || 'AXEL', b = cfg.dms_label || 'DMS'
-    const key = cfg.control_axel || 'Key'
+    const key = keyLabel(cfg.control_axel)
     const BLUE = '#DBEAFE', YELLOW = '#FFF9C4'
     const cols = ['Source', key, 'PairStatus']
     return [{
@@ -70,7 +74,7 @@ function buildSheets(type, config) {
 
   if (type === 'calc_diff') {
     const a = cfg.axel_label || 'AXEL', b = cfg.dms_label || 'DMS'
-    const key = cfg.key_axel || 'Key'
+    const key = keyLabel(cfg.key_axel)
     const cols = [key, `${cfg.val_axel || 'value'} [${a}]`, `${cfg.val_dms || 'value'} [${b}]`, 'Difference']
     return [{ sheet: 'Differences', columns: cols, rows: [
       ['1001', '1200', '1000', '200'],
@@ -80,7 +84,7 @@ function buildSheets(type, config) {
 
   if (type === 'custom_rule') {
     const a = cfg.axel_label || 'AXEL', b = cfg.dms_label || 'DMS'
-    const key = cfg.key_axel || 'Key'
+    const key = keyLabel(cfg.key_axel)
     const checks = (cfg.checks || []).filter(c => c.axel_col || c.dms_col)
     const RED = '#FECACA'
     const cols = [key]
@@ -105,6 +109,20 @@ function buildSheets(type, config) {
       { sheet: 'Rule_Results', columns: cols, rows: [passRow, failRow] },
       { sheet: 'Failures', columns: cols, rows: [failRow] },
     ]
+  }
+
+  if (type === 'agg_compare') {
+    const a = cfg.axel_label || 'AXEL', b = cfg.dms_label || 'DMS'
+    const group = keyLabel(cfg.group_axel, 'Group')
+    const metric = cfg.metric || 'sum'
+    const val = cfg.value_axel || (metric === 'count' ? 'rows' : 'value')
+    const RED = '#FECACA'
+    const m = `${metric}(${val})`
+    const cols = [group, `${m} [${a}]`, `${m} [${b}]`, 'Difference', 'Result']
+    return [{ sheet: 'Aggregate', columns: cols, rows: [
+      ['205', '677105.62', '677105.62', '0', 'Pass'],
+      [{ v: '206', bg: RED }, { v: '12000', bg: RED }, { v: '11500', bg: RED }, { v: '500', bg: RED }, { v: 'Fail', bg: RED }],
+    ] }]
   }
 
   return []

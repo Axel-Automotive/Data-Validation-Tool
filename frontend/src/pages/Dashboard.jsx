@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail } from 'lucide-react'
+import { Play, Download, CheckCircle2, XCircle, Clock, ArrowRight, GitCompare, Layers, TrendingUp, AlertTriangle, SlidersHorizontal, Mail, Sigma } from 'lucide-react'
 import { runAll, runAllAndEmail, runCondition, downloadUrl } from '../api/clients'
 import { listFiles } from '../api/schedules'
 import { getShared } from '../api/shared'
@@ -16,6 +16,7 @@ const TYPE_META = {
   stacked:    { label: 'Stacked Comparison', Icon: Layers,      chip: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/60' },
   calc_diff:  { label: 'Calc. Difference',   Icon: TrendingUp,  chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60' },
   custom_rule:{ label: 'Custom Rule',        Icon: SlidersHorizontal, chip: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/60' },
+  agg_compare:{ label: 'Aggregate Comparison', Icon: Sigma,           chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/60' },
 }
 
 export default function Dashboard({ selectedClient, onNavigate }) {
