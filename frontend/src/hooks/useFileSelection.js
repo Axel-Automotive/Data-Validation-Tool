@@ -110,6 +110,7 @@ export default function useFileSelection(clientId = null) {
   const selectAxel = useCallback((info, sheet) => { setFileAxel(info); setSheetAxel(sheet || info?.sheets?.[0] || '') }, [])
   const selectDms  = useCallback((info, sheet) => { setFileDms(info);  setSheetDms(sheet  || info?.sheets?.[0] || '') }, [])
   const clear = useCallback(() => {
+    axelSourceToken.current++   // invalidate any in-flight query column load
     setFileAxel(null); setFileDms(null); setSheetAxel(''); setSheetDms('')
     setColumnsAxel([]); setColumnsDms([]); setDatasetInfo({ axel: null, dms: null })
     setAxelMode('file'); setAxelQuery(null); setAxelParams({})

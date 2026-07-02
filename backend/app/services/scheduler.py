@@ -1,24 +1,43 @@
 """Background scheduler that runs validations automatically and emails reports."""
 from __future__ import annotations
+import logging
 import os
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.util import astimezone
 
 from app.routers.files import load_df
 from app.services import client_store, email_service, runs_store, schedule_store, shared_store
 from app.services.excel_service import get_result, run_all_conditions
 
+log = logging.getLogger(__name__)
+
 _scheduler: BackgroundScheduler | None = None
 
 VALID_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
-# Schedules store hour/minute as the user's local wall-clock time. In a container
-# the process TZ is UTC, so an 08:00 schedule would fire at 08:00 UTC. Set
-# SCHEDULER_TIMEZONE (IANA name, e.g. "America/New_York") to fire in that zone;
-# unset → the server's local time (unchanged legacy behaviour).
-SCHEDULER_TIMEZONE = os.getenv("SCHEDULER_TIMEZONE") or None
+
+def _resolve_timezone():
+    """Schedules store hour/minute as the user's local wall-clock time. In a
+    container the process TZ is UTC, so an 08:00 schedule would fire at 08:00
+    UTC. Set SCHEDULER_TIMEZONE (IANA name, e.g. "America/New_York") to fire in
+    that zone; unset → the server's local time (unchanged legacy behaviour).
+
+    An invalid value must NOT take down app startup — fall back to local time.
+    """
+    name = os.getenv("SCHEDULER_TIMEZONE") or None
+    if not name:
+        return None
+    try:
+        return astimezone(name)
+    except Exception:
+        log.warning("Invalid SCHEDULER_TIMEZONE %r — falling back to server local time.", name)
+        return None
+
+
+SCHEDULER_TIMEZONE = _resolve_timezone()
 
 
 def start() -> None:

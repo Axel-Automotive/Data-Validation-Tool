@@ -57,13 +57,17 @@ function ScheduleForm({ initial, clients, files, onSave, onCancel }) {
   const [queryId,     setQueryId]     = useState(initial?.axel_source?.query_id || '')
   const [queryParams, setQueryParams] = useState(initial?.axel_source?.params || {})
 
-  // Load the selected client's queries. On a client CHANGE (not the initial
-  // mount) clear the query selection — a query id belongs to one client, so
-  // keeping it would silently submit another client's query id.
-  const firstQueryLoad = useRef(true)
+  // Load the selected client's queries. When the client actually CHANGES clear
+  // the query selection — a query id belongs to one client, so keeping it would
+  // silently submit another client's query id. Compare against the previous
+  // value (not a first-run flag) so StrictMode's double-invoked mount effect
+  // can't wrongly clear the initial selection when editing a schedule.
+  const prevClientId = useRef(clientId)
   useEffect(() => {
-    if (!firstQueryLoad.current) { setQueryId(''); setQueryParams({}) }
-    firstQueryLoad.current = false
+    if (prevClientId.current !== clientId) {
+      setQueryId(''); setQueryParams({})
+      prevClientId.current = clientId
+    }
     if (!clientId) { setQueries([]); return }
     let cancelled = false
     getAxelQueries(clientId)
